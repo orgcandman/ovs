@@ -35,6 +35,7 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/byteq.h \
 	lib/cfm.c \
 	lib/cfm.h \
+	lib/chutil.h \
 	lib/classifier.c \
 	lib/classifier.h \
 	lib/classifier-private.h \
@@ -308,6 +309,7 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/strsep.c
 else
 lib_libopenvswitch_la_SOURCES += \
+	lib/chutil-unix.c \
 	lib/daemon-unix.c \
 	lib/latch-unix.c \
 	lib/signals.c \

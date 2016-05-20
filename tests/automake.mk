@@ -174,6 +174,7 @@ valgrind_wrappers = \
 	tests/valgrind/test-atomic \
 	tests/valgrind/test-bundle \
 	tests/valgrind/test-byte-order \
+	tests/valgrind/test-chutil \
 	tests/valgrind/test-classifier \
 	tests/valgrind/test-ccmap \
 	tests/valgrind/test-cmap \
@@ -361,6 +362,7 @@ tests_ovstest_SOURCES = \
 
 if !WIN32
 tests_ovstest_SOURCES += \
+	tests/test-chutil.c \
 	tests/test-unix-socket.c
 endif
 
