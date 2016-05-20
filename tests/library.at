@@ -240,3 +240,8 @@ AT_CLEANUP
 AT_SETUP([rcu])
 AT_CHECK([ovstest test-rcu-quiesce], [0], [])
 AT_CLEANUP
+
+AT_SETUP([test chutil functions])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+AT_CHECK([ovstest test-chutil], [0], [ignore], [ignore])
+AT_CLEANUP

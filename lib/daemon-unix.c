@@ -15,6 +15,7 @@
  */
 
 #include <config.h>
+#include "chutil.h"
 #include "daemon.h"
 #include "daemon-private.h"
 #include <errno.h>
@@ -874,58 +875,6 @@ daemon_become_new_user(bool access_datapath)
     }
 }
 
-/* Return the maximun suggested buffer size for both getpwname_r()
- * and getgrnam_r().
- *
- * This size may still not be big enough. in case getpwname_r()
- * and friends return ERANGE, a larger buffer should be supplied to
- * retry. (The man page did not specify the max size to stop at, we
- * will keep trying with doubling the buffer size for each round until
- * the size wrapps around size_t.  */
-static size_t
-get_sysconf_buffer_size(void)
-{
-    size_t bufsize, pwd_bs = 0, grp_bs = 0;
-    const size_t default_bufsize = 1024;
-
-    errno = 0;
-    if ((pwd_bs = sysconf(_SC_GETPW_R_SIZE_MAX)) == -1) {
-        if (errno) {
-            VLOG_FATAL("%s: Read initial passwordd struct size "
-                       "failed (%s), aborting. ", pidfile,
-                       ovs_strerror(errno));
-        }
-    }
-
-    if ((grp_bs = sysconf(_SC_GETGR_R_SIZE_MAX)) == -1) {
-        if (errno) {
-            VLOG_FATAL("%s: Read initial group struct size "
-                       "failed (%s), aborting. ", pidfile,
-                       ovs_strerror(errno));
-        }
-    }
-
-    bufsize = MAX(pwd_bs, grp_bs);
-    return bufsize ? bufsize : default_bufsize;
-}
-
-/* Try to double the size of '*buf', return true
- * if successful, and '*sizep' will be updated with
- * the new size. Otherwise, return false.  */
-static bool
-enlarge_buffer(char **buf, size_t *sizep)
-{
-    size_t newsize = *sizep * 2;
-
-    if (newsize > *sizep) {
-        *buf = xrealloc(*buf, newsize);
-        *sizep = newsize;
-        return true;
-    }
-
-    return false;
-}
-
 /* Parse and sanity check user_spec.
  *
  * If successful, set global variables 'uid' and 'gid'
@@ -940,10 +889,6 @@ enlarge_buffer(char **buf, size_t *sizep)
 void
 daemon_set_new_user(const char *user_spec)
 {
-    char *pos = strchr(user_spec, ':');
-    size_t init_bufsize, bufsize;
-
-    init_bufsize = get_sysconf_buffer_size();
     uid = getuid();
     gid = getgid();
 
@@ -951,94 +896,10 @@ daemon_set_new_user(const char *user_spec)
         VLOG_FATAL("%s: only root can use --user option", pidfile);
     }
 
-    user_spec += strspn(user_spec, " \t\r\n");
-    size_t len = pos ? pos - user_spec : strlen(user_spec);
-    char *buf;
-    struct passwd pwd, *res;
-    int e;
-
-    bufsize = init_bufsize;
-    buf = xmalloc(bufsize);
-    if (len) {
-        user = xmemdup0(user_spec, len);
-
-        while ((e = getpwnam_r(user, &pwd, buf, bufsize, &res)) == ERANGE) {
-            if (!enlarge_buffer(&buf, &bufsize)) {
-                break;
-            }
-        }
-
-        if (e != 0) {
-            VLOG_FATAL("%s: Failed to retrive user %s's uid (%s), aborting.",
-                       pidfile, user, ovs_strerror(e));
-        }
-        if (res == NULL) {
-            VLOG_FATAL("%s: user %s not found, aborting.", pidfile, user);
-        }
+    if (!ovs_strtousr(user_spec, &uid, &user, &gid, true)) {
+        switch_user = true;
     } else {
-        /* User name is not specified, use current user.  */
-        while ((e = getpwuid_r(uid, &pwd, buf, bufsize, &res)) == ERANGE) {
-            if (!enlarge_buffer(&buf, &bufsize)) {
-                break;
-            }
-        }
-
-        if (e != 0) {
-            VLOG_FATAL("%s: Failed to retrive current user's name "
-                       "(%s), aborting.", pidfile, ovs_strerror(e));
-        }
-        user = xstrdup(pwd.pw_name);
+        VLOG_FATAL("%s: Failed --user option with %s, aborting.", pidfile,
+                   user_spec);
     }
-
-    uid = pwd.pw_uid;
-    gid = pwd.pw_gid;
-    free(buf);
-
-    if (pos) {
-        char *grpstr = pos + 1;
-        grpstr += strspn(grpstr, " \t\r\n");
-
-        if (*grpstr) {
-            struct group grp, *res;
-
-            bufsize = init_bufsize;
-            buf = xmalloc(bufsize);
-            while ((e = getgrnam_r(grpstr, &grp, buf, bufsize, &res))
-                         == ERANGE) {
-                if (!enlarge_buffer(&buf, &bufsize)) {
-                    break;
-                }
-            }
-
-            if (e) {
-                VLOG_FATAL("%s: Failed to get group entry for %s, "
-                           "(%s), aborting.", pidfile, grpstr,
-                           ovs_strerror(e));
-            }
-            if (res == NULL) {
-                VLOG_FATAL("%s: group %s not found, aborting.", pidfile,
-                           grpstr);
-            }
-
-            if (gid != grp.gr_gid) {
-                char **mem;
-
-                for (mem = grp.gr_mem; *mem; ++mem) {
-                    if (!strcmp(*mem, user)) {
-                        break;
-                    }
-                }
-
-                if (!*mem) {
-                    VLOG_FATAL("%s: Invalid --user option %s (user %s is "
-                               "not in group %s), aborting.", pidfile,
-                               user_spec, user, grpstr);
-                }
-                gid = grp.gr_gid;
-            }
-            free(buf);
-        }
-    }
-
-    switch_user = true;
 }
