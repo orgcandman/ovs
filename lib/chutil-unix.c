@@ -19,6 +19,7 @@
 #include "chutil.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <grp.h>
 #include <inttypes.h>
 #include <pwd.h>
@@ -263,6 +264,240 @@ actions:
         }
     }
     return ret;
+}
+
+
+#define K_ROUNDS 9 /* Lifted from "Portably Solving File TOCTTOU Races with
+                      Hardness Amplification" by Tsafrir, et. al. */
+
+static int cmp_stat(struct stat *s1, struct stat *s2)
+{
+    return s1->st_ino == s2->st_ino && s1->st_dev == s2->st_dev &&
+        s1->st_mode == s2->st_mode;
+}
+
+
+/* Checks whether the relative path element is a symlink.  If an error
+ * occurs, returns -1.  If the path is a symlink, returns 1.  Otherwise,
+ * returns 0.  The stat struct, and target, are output variables and are
+ * considered valid unless the return value is -1.  In the case that the
+ * hardness Amplification fails, errno will be set to EBADFD. */
+static int is_symlink(int dirfd, const char *path_elem, char target[],
+                      size_t target_len, struct stat *s)
+{
+    struct stat s_cmp;
+    int result;
+    for (int k = 0; k < K_ROUNDS; ++k) {
+        result = fstatat(dirfd, path_elem, s, 0);
+        if (!k) {
+            s_cmp = *s;
+        } else if (!cmp_stat(&s_cmp, s)){
+            return -1;
+        }
+    }
+
+    if (!result && S_ISLNK(s->st_mode)) {
+        result = readlinkat(dirfd, path_elem, target, target_len);
+        if (result != -1) {
+            target[result] = '\0';
+            result = 1;
+        }
+    }
+    return result;
+}
+
+
+static int directory_traverse(const char *path, int top_fd)
+{
+    char *dir_path = NULL, *full_path = NULL;
+    int dirfd = -1;
+    struct stat st;
+
+    if (path[0] != '/' && top_fd == -1) {
+        char cwd_buf[PATH_MAX] = {0};
+        if (getcwd(cwd_buf, PATH_MAX)) {
+            top_fd = directory_traverse(cwd_buf, -1);
+        }
+    } else {
+        top_fd = open("/", O_PATH);
+    }
+
+    if (top_fd == -1 || !strcmp(path, "/")) {
+        return top_fd;
+    }
+
+    dir_path = full_path = xstrdup(path);
+    dir_path += strspn(dir_path, "/");
+    do {
+        char symlink_target[PATH_MAX] = {0};
+        if (strspn(dir_path, "/")) {
+            *(dir_path + strspn(dir_path, "/")) = '\0';
+        }
+        switch (is_symlink(top_fd, dir_path, symlink_target, PATH_MAX, &st)) {
+        case 0:
+            dirfd = openat(top_fd, dir_path, O_PATH|O_NOFOLLOW|O_DIRECTORY);
+            break;
+        case 1:
+            if (symlink_target[0] != '/') {
+                dirfd = directory_traverse(symlink_target, top_fd);
+            } else {
+                dirfd = directory_traverse(symlink_target, -1);
+            }
+            break;
+        default:
+            dirfd = -1;
+            break;
+        }
+        close(top_fd);
+        if (dirfd != -1) {
+            struct stat s;
+            if (!fstat(dirfd, &s) && cmp_stat(&s, &st)) {
+                size_t path_elem_len = strlen(dir_path);
+                dir_path += path_elem_len;
+            } else {
+                close(dirfd);
+                dirfd = -1;
+            }
+        }
+        top_fd = dirfd;
+    } while (dirfd >= 0 && strlen(dir_path));
+    free(full_path);
+    return top_fd;
+}
+
+
+/* Changes the mode of a file to the mode specified.  Accepts chmod style
+ * comma-separated strings.  Returns 0 on success, otherwise a positive errno
+ * value.  This version partially implements the amplification hardness
+ * technique to detect (and occasionally prevent) some forms of TOCTTOU
+ * errors.  In the case that the named file is a unix-domain socket, the
+ * containing directory for the socket must have restrictive permissions.
+ * EINVAL will be populated in errno if the final path atom is a symbolic link.
+ * It is recommended to use ovs_fchmod if the path is already opened. */
+int
+ovs_kchmod(const char *path, const char *mode)
+{
+    char *tmpdir = xstrdup(path);
+    char *tmppath = strrchr(tmpdir, '/');
+    int fd = -1, result = 0;
+    int dirfd, k;
+    char target_path[PATH_MAX];
+    struct stat st, s;
+    if (!tmppath) {
+        dirfd = directory_traverse(".", -1);
+    } else {
+        *tmppath++ = '\0';
+        dirfd = directory_traverse(tmpdir, -1);
+    }
+
+    if (dirfd == -1 || is_symlink(dirfd, tmppath, target_path, PATH_MAX, &s)) {
+        goto end;
+    }
+
+    mode_t new_mode;
+    errno = 0;
+    new_mode = chmod_getmode(mode, s.st_mode);
+    result = fchmodat(dirfd, tmppath, new_mode, 0);
+    /* need to reset 's' copy of st_mode, because it will have changed. */
+    s.st_mode = new_mode | (s.st_mode & ~(ALL_MODES));
+    for (k = 0; !errno && !result && k < K_ROUNDS; ++k) {
+        result = fstatat(dirfd, tmppath, &st, AT_SYMLINK_NOFOLLOW);
+        if (result) {
+            goto end;
+        }
+
+        if (!cmp_stat(&s, &st)) {
+            /* WARNING: In this case, a race means we modified an inode,
+             * and it may have been the wrong one. */
+            errno = EBADFD;
+            goto end;
+        }
+    }
+
+end:
+    if (errno) {
+        result = errno;
+        VLOG_ERR("ovs_kchown: (%s)", ovs_strerror(errno));
+    }
+    if (fd != -1) {
+        close(fd);
+    }
+    if (dirfd != -1) {
+        close(dirfd);
+    }
+    free(tmpdir);
+    return result;
+}
+
+
+/* Changes the mode of a file to the mode specified.  Accepts chmod style
+ * comma-separated strings.  Returns 0 on success, otherwise a positive errno
+ * value.  This version partially implements the amplification hardness
+ * technique to detect (and occasionally prevent) some forms of TOCTTOU
+ * errors.  In the case that the named file is a unix-domain socket, the
+ * containing directory for the socket must have restrictive permissions.  In
+ * the case of a normal file, an openat(directory fd, filename,
+ * O_PATH|O_NOFOLLOW) call is used to get a guaranteed inode mapping, and then
+ * the ovs_fchmod call is used.  EINVAL will be populated in errno if the
+ * final path atom is a symbolic link. */
+int
+ovs_kchown(const char *path, const char *usrstr)
+{
+    char *tmpdir = xstrdup(path);
+    char *tmppath = strrchr(tmpdir, '/');
+    int fd = -1, result = 0;
+    int dirfd, k;
+    char target_path[PATH_MAX];
+    struct stat st, s;
+    if (!tmppath) {
+        dirfd = directory_traverse(".", -1);
+    } else {
+        *tmppath++ = '\0';
+        dirfd = directory_traverse(tmpdir, -1);
+    }
+
+    if (dirfd == -1 || is_symlink(dirfd, tmppath, target_path, PATH_MAX, &s)) {
+        goto end;
+    }
+
+    uid_t user;
+    gid_t group;
+
+    if (ovs_strtousr(usrstr, &user, NULL, &group, true)) {
+        errno = EINVAL;
+        goto end;
+    }
+
+    errno = 0; /* clearing errno here is for the result assignment later. */
+    result = fchownat(dirfd, tmppath, user, group, 0);
+    for (k = 0; !errno && !result && k < K_ROUNDS; ++k) {
+        result = fstatat(dirfd, tmppath, &st, AT_SYMLINK_NOFOLLOW);
+        if (result) {
+            goto end;
+        }
+
+        if (!cmp_stat(&s, &st)) {
+            /* WARNING: In this case, a race means we modified an inode,
+             * and it may have been the wrong one. */
+            errno = EBADFD;
+            goto end;
+        }
+    }
+
+end:
+    if (errno) {
+        result = errno;
+        VLOG_ERR("ovs_kchown: (%s)", ovs_strerror(errno));
+    }
+
+    if (fd != -1) {
+        close(fd);
+    }
+    if (dirfd != -1) {
+        close(dirfd);
+    }
+    free(tmpdir);
+    return result;
 }
 
 
