@@ -31,6 +31,7 @@
 #include <sys/stat.h>
 #include <getopt.h>
 
+#include "chutil.h"
 #include "dirs.h"
 #include "dp-packet.h"
 #include "dpif-netdev.h"
@@ -141,6 +142,10 @@ BUILD_ASSERT_DECL((MAX_NB_MBUF / ROUND_DOWN_POW2(MAX_NB_MBUF/MIN_NB_MBUF))
                                           * yet mapped to another queue. */
 
 static char *vhost_sock_dir = NULL;   /* Location of vhost-user sockets */
+static char *vhost_sock_def_owner = NULL; /* Default owner of vhost-user
+                                           * sockets */
+static char *vhost_sock_def_perms = NULL; /* Default permissions of
+                                           * vhost-user sockets */
 
 #define VHOST_ENQ_RETRY_NUM 8
 #define IF_NAME_SZ (PATH_MAX > IFNAMSIZ ? PATH_MAX : IFNAMSIZ)
@@ -889,6 +894,30 @@ get_vhost_id(struct netdev_dpdk *dev)
 }
 
 static int
+vhost_set_permissions(struct netdev_dpdk *dev) OVS_REQUIRES(dpdk_mutex)
+{
+    int err = 0;
+
+    /* ovs_kchown and ovs_kchmod are robust enough to deal with null or
+     * empty strings.  However, since they have the potential to race,
+     * only attempt them if the user actually requested a change. */
+
+    if (vhost_sock_def_owner &&
+        (err = ovs_kchown(dev->vhost_server_id, vhost_sock_def_owner))) {
+        VLOG_ERR("dpdk: vhost-user socket (%s) ownership change failed (%s).",
+                 dev->vhost_server_id, ovs_strerror(err));
+    }
+
+    if (!err && vhost_sock_def_perms &&
+        (err = ovs_kchmod(dev->vhost_server_id, vhost_sock_def_perms))) {
+        VLOG_ERR("dpdk: vhost-user socket (%s) permissions failed (%s).",
+                 dev->vhost_server_id, ovs_strerror(err));
+    }
+    return err;
+}
+
+
+static int
 netdev_dpdk_vhost_construct(struct netdev *netdev)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
@@ -932,9 +961,13 @@ netdev_dpdk_vhost_construct(struct netdev *netdev)
         err = netdev_dpdk_init(netdev, -1, DPDK_DEV_VHOST);
     }
 
+    if (!err) {
+        err = vhost_set_permissions(dev);
+    }
     ovs_mutex_unlock(&dpdk_mutex);
     return err;
 }
+
 
 static int
 netdev_dpdk_construct(struct netdev *netdev)
@@ -3363,6 +3396,10 @@ dpdk_init__(const struct smap *ovs_other_config)
     } else {
         vhost_sock_dir = sock_dir_subcomponent;
     }
+    process_vhost_flags("vhost-sock-owner", NULL, NAME_MAX, ovs_other_config,
+                        &vhost_sock_def_owner);
+    process_vhost_flags("vhost-sock-perms", NULL, NAME_MAX, ovs_other_config,
+                        &vhost_sock_def_perms);
 
     argv = grow_argv(&argv, 0, 1);
     argc = 1;

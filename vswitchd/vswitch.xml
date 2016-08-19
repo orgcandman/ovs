@@ -299,6 +299,29 @@
         </p>
       </column>
 
+      <column name="other_config" key="vhost-sock-owner"
+              type='{"type": "string"}'>
+        <p>
+          Specifies the owner of the vhost-user unix domain socket files.
+        </p>
+        <p>
+          The default is to inherit from the running user and group id's. The
+          argument is specified in the same form as the 'chown' unix utility.
+        </p>
+      </column>
+
+      <column name="other_config" key="vhost-sock-perms"
+              type='{"type": "string"}'>
+        <p>
+          Specifies the permissions for the vhost-user unix domain socket
+          files.
+        </p>
+        <p>
+          The default is derived from the running mask. The argument is
+          specified in the same form as the 'chmod' unix utility.
+        </p>
+      </column>
+
       <column name="other_config" key="n-handler-threads"
               type='{"type": "integer", "minInteger": 1}'>
         <p>
