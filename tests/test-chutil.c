@@ -26,12 +26,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/types.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/un.h>
 #include <unistd.h>
 
 #include "chutil.h"
 #include "ovstest.h"
+#include "random.h"
 #include "util.h"
 
 static int
@@ -46,21 +49,54 @@ get_mode(const char *pathname, mode_t *mode)
 }
 
 static int
-with_temp_file(int (*fn)(const char *pathname, int fd))
+with_temp_file(int (*fn)(const char *pathname, int fd, bool usepath),
+               bool usepath)
 {
     char filepath[PATH_MAX] = "/tmp/test_chutil_wtfXXXXXX";
     mode_t old_mask = umask(0777);
     int fd = mkstemp(filepath);
     umask(old_mask);
     assert(fd >= 0);
-    int result = fn(filepath, fd);
+    int result = fn(filepath, fd, usepath);
     close(fd);
     unlink(filepath);
     return result;
 }
 
 static int
-run_chmod_bad_parsing(const char *pathname, int fd)
+with_temp_socket(int (*fn)(const char *pathname, int fd, bool usepath),
+                 bool usepath)
+{
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    mode_t old_mask = umask(0777);
+    char fname[PATH_MAX];
+    int result = -1;
+
+    assert(fd >= 0);
+
+    /* keep attempting to open a socket until success */
+    for (int kTimes = 0; kTimes < 10; ++kTimes) {
+        struct sockaddr_un addr;
+        snprintf(fname, PATH_MAX, "/tmp/test_chutil_socket%08X",
+                 random_range(~0));
+        memset(&addr, 0, sizeof addr);
+        addr.sun_family = AF_UNIX;
+        snprintf((char *)&addr.sun_path, sizeof addr.sun_path, "%s", fname);
+        if (!bind(fd, (struct sockaddr *)&addr, sizeof addr)) {
+            result = fn(fname, fd, usepath);
+            goto done;
+        }
+    }
+    printf("E: Unable to open a socket after 10 attempts.\n");
+done:
+    umask(old_mask);
+    unlink(fname);
+    close(fd);
+    return result;
+}
+
+static int
+run_chmod_bad_parsing(const char *pathname, int fd, bool usepath)
 {
     static char users[] = "bcdefhijklmnpqrstvwxyz";
     static char perms[] = "abcdefghijklmnopqtuvyz";
@@ -77,7 +113,9 @@ run_chmod_bad_parsing(const char *pathname, int fd)
         char buf[256] = {0};
         mode_t testmode;
         snprintf(buf, sizeof(buf), "%c+rwx", *itest);
-        if (!ovs_fchmod(fd, buf) || get_mode(pathname, &testmode)
+        int chmodresult = usepath ? ovs_kchmod(pathname, buf) :
+            ovs_fchmod(fd, buf);
+        if (!chmodresult || get_mode(pathname, &testmode)
             || testmode != pathmode) {
             printf("F(%s)", buf);
             return -1;
@@ -88,7 +126,9 @@ run_chmod_bad_parsing(const char *pathname, int fd)
         char buf[256] = {0};
         mode_t testmode;
         snprintf(buf, sizeof(buf), "u+%c", *itest);
-        if (!ovs_fchmod(fd, buf) || get_mode(pathname, &testmode)
+        int chmodresult = usepath ? ovs_kchmod(pathname, buf) :
+            ovs_fchmod(fd, buf);
+        if (!chmodresult || get_mode(pathname, &testmode)
             || testmode != pathmode) {
             printf("F(%s)", buf);
             return -1;
@@ -99,7 +139,9 @@ run_chmod_bad_parsing(const char *pathname, int fd)
         char buf[256] = {0};
         mode_t testmode;
         snprintf(buf, sizeof(buf), "u%crw", *itest);
-        if (!ovs_fchmod(fd, buf) || get_mode(pathname, &testmode)
+        int chmodresult = usepath ? ovs_kchmod(pathname, buf) :
+            ovs_fchmod(fd, buf);
+        if (!chmodresult || get_mode(pathname, &testmode)
             || testmode != pathmode) {
             printf("F(%s)", buf);
             return -1;
@@ -111,7 +153,7 @@ run_chmod_bad_parsing(const char *pathname, int fd)
 
 /* Skip suid and sgid for now. */
 static int
-run_chmod_str_successes(const char *pathname, int fd)
+run_chmod_str_successes(const char *pathname, int fd, bool usepath)
 {
     const char *users[] = { "u", "g", "o", "a", "ug", "uo", "go" };
     const char *perms[] = { "r", "w", "x", "rw", "rx", "wx" };
@@ -127,13 +169,17 @@ run_chmod_str_successes(const char *pathname, int fd)
             mode_t pathmode;
             char buf[256] = {0};
             snprintf(buf, sizeof(buf), "%s+%s", users[iusers], perms[iperms]);
-            if (ovs_fchmod(fd, buf) || get_mode(pathname, &pathmode)) {
+            int chmodresult = usepath ? ovs_kchmod(pathname, buf) :
+                ovs_fchmod(fd, buf);
+            if (chmodresult || get_mode(pathname, &pathmode)) {
                 printf("run_chmod_successes:E(%s)\n", buf);
                 return -1;
             }
             /* XXX: Check the actual mode here */
             snprintf(buf, sizeof(buf), "%s-%s", users[iusers], perms[iperms]);
-            if (ovs_fchmod(fd, buf) || get_mode(pathname, &pathmode)
+            chmodresult = usepath ? ovs_kchmod(pathname, buf) :
+                ovs_fchmod(fd, buf);
+            if (chmodresult || get_mode(pathname, &pathmode)
                 || pathmode != chkmode) {
                 printf("run_chmod_successes:F(%s:%x:%x)\n", buf, pathmode,
                        chkmode);
@@ -143,13 +189,16 @@ run_chmod_str_successes(const char *pathname, int fd)
     }
 
     mode_t pmode;
-    if (ovs_fchmod(fd, "u-rwx,g-rwx,o-rwx")
-        || get_mode(pathname, &pmode) || pmode != 0) {
+    int chmodchange = usepath ? ovs_kchmod(pathname, "u-rwx,g-rwx,o-rwx") :
+        ovs_fchmod(fd, "u-rwx,g-rwx,o-rwx");
+    if (chmodchange || get_mode(pathname, &pmode) || pmode != 0) {
         printf("run_chmod_successes:csvF\n");
         return -1;
     }
 
-    if (ovs_fchmod(fd, "u=rx,g=w") || get_mode(pathname, &pmode)
+    chmodchange = usepath ? ovs_kchmod(pathname, "u=rx,g=w") :
+        ovs_fchmod(fd, "u=rx,g=w");
+    if (chmodchange || get_mode(pathname, &pmode)
         || pmode != (S_IRUSR | S_IXUSR | S_IWGRP)) {
         printf("run_chmod_successes:assignF\n");
         return -1;
@@ -158,7 +207,7 @@ run_chmod_str_successes(const char *pathname, int fd)
 }
 
 static int
-run_chmod_numeric_successes(const char *pathname, int fd)
+run_chmod_numeric_successes(const char *pathname, int fd, bool usepath)
 {
     const char *modestrs[] = {"0755", "0644", "0600", "11", "20", "755",
                               "640"};
@@ -174,8 +223,9 @@ run_chmod_numeric_successes(const char *pathname, int fd)
     size_t imodes;
     for (imodes = 0; imodes < ARRAY_SIZE(modestrs); ++imodes) {
         mode_t newmode;
-        if (ovs_fchmod(fd, modestrs[imodes]) ||
-           get_mode(pathname, &newmode)) {
+        int chmodresult = usepath ? ovs_kchmod(pathname, modestrs[imodes]) :
+            ovs_fchmod(fd, modestrs[imodes]);
+        if (chmodresult || get_mode(pathname, &newmode)) {
             printf("run_chmod_numeric_successes:F(%s)\n", modestrs[imodes]);
             return -1;
         }
@@ -232,9 +282,13 @@ run_ovs_strtouser_failures(void)
 static void
 test_chutil_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
-    assert(!with_temp_file(run_chmod_bad_parsing));
-    assert(!with_temp_file(run_chmod_str_successes));
-    assert(!with_temp_file(run_chmod_numeric_successes));
+    assert(!with_temp_file(run_chmod_bad_parsing, false));
+    assert(!with_temp_file(run_chmod_str_successes, false));
+    assert(!with_temp_file(run_chmod_numeric_successes, false));
+    assert(!with_temp_file(run_chmod_str_successes, true));
+    assert(!with_temp_file(run_chmod_numeric_successes, true));
+    assert(!with_temp_socket(run_chmod_str_successes, true));
+    assert(!with_temp_socket(run_chmod_numeric_successes, true));
     assert(!run_ovs_strtouser_successes());
     assert(!run_ovs_strtouser_failures());
     printf("\n");

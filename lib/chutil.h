@@ -25,6 +25,10 @@
 #ifndef WIN32
 int ovs_fchmod(int fd, const char *mode) OVS_WARN_UNUSED_RESULT;
 int ovs_fchown(int fd, const char *usrstr) OVS_WARN_UNUSED_RESULT;
+
+int ovs_kchmod(const char *path, const char *mode) OVS_WARN_UNUSED_RESULT;
+int ovs_kchown(const char *path, const char *usrstr) OVS_WARN_UNUSED_RESULT;
+
 int ovs_strtousr(const char *user_spec, uid_t *uid, char **user,
                  gid_t *gid, bool validate_user_group) OVS_WARN_UNUSED_RESULT;
 #endif
