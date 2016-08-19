@@ -223,6 +223,13 @@ advanced install guide [INSTALL.DPDK-ADVANCED.md]
      * vhost-sock-dir
      Option to set the path to the vhost_user unix socket files.
 
+     * vhost-sock-owner
+     Option to set the owner of the vhost_user unix socket files.
+
+     * vhost-sock-perms
+     Option to set the file-system permissions of the vhost_user unix socket
+     files.
+
      NOTE: Changing any of these options requires restarting the ovs-vswitchd
      application.
 
