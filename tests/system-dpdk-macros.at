@@ -1,0 +1,68 @@
+# _ADD_BR([name])
+#
+# Expands into the proper ovs-vsctl commands to create a bridge with the
+# appropriate type and properties
+m4_define([_ADD_BR], [[add-br $1 -- set Bridge $1 protocols=OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13,OpenFlow14,OpenFlow15 fail-mode=secure datapath_type=netdev]])
+
+# ADD_CLIENTVHUPORT([name], [path], [bridge], [vsctl-args])
+#
+# creates a vhostuser client mode port named 'name'
+m4_define([ADD_CLIENTVHUPORT],
+  [AT_CHECK([ovs-vsctl add-port $3 $1 -- set Interface $1 type=dpdkvhostuserclient options:vhost-server-path=$2])]
+)
+
+# SETUP_HUGEPAGES
+#
+# If nr_hugepages is 0, sets it to either the provided value, or 1024 if no
+# value is specified
+# Also ensures a hugetlbfs is mounted at /dev/hugepages
+m4_define([SETUP_HUGEPAGES],
+  [if grep -E ^0$ /proc/sys/vm/nr_hugepages >/dev/null 2>&1; then
+     if test -n "$1"; then
+        AT_CHECK([echo "$1" > /proc/sys/vm/nr_hugepages])
+     else
+        AT_CHECK([echo 1024 > /proc/sys/vm/nr_hugepages])
+     fi
+   fi
+   if ! test -e /dev/hugepages; then
+      AT_CHECK([mkdir -p /dev/hugepages])
+   fi
+   if ! mount | grep /dev/hugepages; then
+      AT_CHECK([mount -t hugetlbfs none /dev/hugepages])
+   fi])
+
+
+# OVS_TRAFFIC_VSWITCHD_START([vsctl-args], [vsctl-output], [=override])
+#
+# Creates a database and starts ovsdb-server, starts ovs-vswitchd
+# connected to that database, calls ovs-vsctl to create a bridge named
+# br0 with predictable settings, passing 'vsctl-args' as additional
+# commands to ovs-vsctl.  If 'vsctl-args' causes ovs-vsctl to provide
+# output (e.g. because it includes "create" commands) then 'vsctl-output'
+# specifies the expected output after filtering through uuidfilt.pl.
+#
+# Best-effort loading of all available vport modules is performed.
+#
+m4_define([OVS_TRAFFIC_VSWITCHD_START],
+  [SETUP_HUGEPAGES
+   _OVS_VSWITCHD_START([])
+   dnl Add bridges, ports, etc.
+   AT_CHECK([ovs-vsctl -- _ADD_BR([br0]) -- $1 m4_if([$2], [], [], [| ${PERL} $srcdir/uuidfilt.pl])], [0], [$2])
+])
+
+# OVS_TRAFFIC_VSWITCHD_STOP([WHITELIST], [extra_cmds])
+#
+# Gracefully stops ovs-vswitchd and ovsdb-server, checking their log files
+# for messages with severity WARN or higher and signaling an error if any
+# is present.  The optional WHITELIST may contain shell-quoted "sed"
+# commands to delete any warnings that are actually expected, e.g.:
+#
+#   OVS_TRAFFIC_VSWITCHD_STOP(["/expected error/d"])
+#
+# 'extra_cmds' are shell commands to be executed afte OVS_VSWITCHD_STOP() is
+# invoked. They can be used to perform additional cleanups such as name space
+# removal.
+m4_define([OVS_TRAFFIC_VSWITCHD_STOP],
+  [OVS_VSWITCHD_STOP([$1])
+   AT_CHECK([:; $2])
+  ])
