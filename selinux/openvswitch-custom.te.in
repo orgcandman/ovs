@@ -1,6 +1,8 @@
 module openvswitch-custom 1.0.1;
 
 require {
+        role system_r;
+
         type openvswitch_t;
         type openvswitch_load_module_t;
         type openvswitch_load_module_exec_t;
@@ -23,7 +25,7 @@ require {
         class capability { dac_override audit_write };
         class chr_file { write getattr read open ioctl };
         class dir { write remove_name add_name lock read };
-        class file { write getattr read open execute execute_no_trans create unlink map entrypoint };
+        class file { write getattr read open execute execute_no_trans create unlink map entrypoint lock ioctl };
         class netlink_audit_socket { create nlmsg_relay audit_write read write };
         class netlink_socket { setopt getopt create connect getattr write read };
         class system module_load;
@@ -34,6 +36,11 @@ require {
         class tun_socket { relabelfrom relabelto create };
 @end_dpdk@
 }
+
+#============== Setup the transition domain =============
+domain_type(openvswitch_load_module_t);
+role system_r types openvswitch_load_module_t;
+domain_entry_file(openvswitch_load_module_t, openvswitch_load_module_t);
 
 #============= openvswitch_t ==============
 allow openvswitch_t self:capability { dac_override audit_write };
