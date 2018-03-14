@@ -1,4 +1,5 @@
 *.pem
+*.log
 /Makefile
 /Makefile.in
 /atconfig
