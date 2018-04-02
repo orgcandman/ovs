@@ -738,7 +738,6 @@ nl_sock_recv__(struct nl_sock *sock, struct ofpbuf *buf, int *nsid, bool wait)
         COVERAGE_INC(netlink_recv_jumbo);
         ofpbuf_put(buf, tail, retval - buf->allocated);
     }
-#endif
 
     if (nsid) {
         /* The network namespace id from which the message was sent comes
@@ -772,6 +771,7 @@ nl_sock_recv__(struct nl_sock *sock, struct ofpbuf *buf, int *nsid, bool wait)
             cmsg = CMSG_NXTHDR(&msg, cmsg);
         }
     }
+#endif
 
     log_nlmsg(__func__, 0, buf->data, buf->size, sock->protocol);
     COVERAGE_INC(netlink_received);
