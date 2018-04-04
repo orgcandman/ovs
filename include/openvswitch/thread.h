@@ -118,6 +118,12 @@ static inline bool ovsthread_once_start(struct ovsthread_once *once)
 void ovsthread_once_done(struct ovsthread_once *once)
     OVS_RELEASES(once->mutex);
 
+/* Indicates that an attempt at a one-time initialization is
+ * eligible to be re-attempted.  Normally, an ovsthread_once_done would
+ * allow all of the pending actors to wake and return successfully. */
+void ovsthread_once_incomplete(struct ovsthread_once *once)
+    OVS_RELEASES(once->mutex);
+
 bool ovsthread_once_start__(struct ovsthread_once *once)
     OVS_TRY_LOCK(true, once->mutex);
 

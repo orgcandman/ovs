@@ -407,6 +407,8 @@ bridge_init(const char *remote)
     ovsdb_idl_omit(idl, &ovsrec_open_vswitch_col_db_version);
     ovsdb_idl_omit(idl, &ovsrec_open_vswitch_col_system_type);
     ovsdb_idl_omit(idl, &ovsrec_open_vswitch_col_system_version);
+    ovsdb_idl_omit(idl, &ovsrec_open_vswitch_col_dpdk_version);
+    ovsdb_idl_omit(idl, &ovsrec_open_vswitch_col_dpdk_initialized);
 
     ovsdb_idl_omit_alert(idl, &ovsrec_bridge_col_datapath_id);
     ovsdb_idl_omit_alert(idl, &ovsrec_bridge_col_datapath_version);

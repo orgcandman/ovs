@@ -34,7 +34,7 @@
 
 struct smap;
 
-void dpdk_init(const struct smap *ovs_other_config);
+bool dpdk_init(const struct smap *ovs_other_config);
 void dpdk_set_lcore_id(unsigned cpu);
 const char *dpdk_get_vhost_sock_dir(void);
 bool dpdk_vhost_iommu_enabled(void);

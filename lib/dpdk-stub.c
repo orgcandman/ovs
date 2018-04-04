@@ -24,7 +24,7 @@
 
 VLOG_DEFINE_THIS_MODULE(dpdk);
 
-void
+bool
 dpdk_init(const struct smap *ovs_other_config)
 {
     if (smap_get_bool(ovs_other_config, "dpdk-init", false)) {
@@ -35,6 +35,8 @@ dpdk_init(const struct smap *ovs_other_config)
             ovsthread_once_done(&once);
         }
     }
+
+    return false;
 }
 
 void

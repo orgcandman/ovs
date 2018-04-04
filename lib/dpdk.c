@@ -22,6 +22,7 @@
 #include <sys/stat.h>
 #include <getopt.h>
 
+#include <rte_errno.h>
 #include <rte_log.h>
 #include <rte_memzone.h>
 #include <rte_version.h>
@@ -43,6 +44,8 @@ static FILE *log_stream = NULL;       /* Stream for DPDK log redirection */
 
 static char *vhost_sock_dir = NULL;   /* Location of vhost-user sockets */
 static bool vhost_iommu_enabled = false; /* Status of vHost IOMMU support */
+
+static struct vlog_rate_limit init_rl = VLOG_RATE_LIMIT_INIT(30, 300);
 
 static int
 process_vhost_flags(char *flag, const char *default_val, int size,
@@ -306,7 +309,7 @@ static cookie_io_functions_t dpdk_log_func = {
     .write = dpdk_log_write,
 };
 
-static void
+static bool
 dpdk_init__(const struct smap *ovs_other_config)
 {
     char **argv = NULL, **argv_to_release = NULL;
@@ -320,6 +323,7 @@ dpdk_init__(const struct smap *ovs_other_config)
     log_stream = fopencookie(NULL, "w+", dpdk_log_func);
     if (log_stream == NULL) {
         VLOG_ERR("Can't redirect DPDK log: %s.", ovs_strerror(errno));
+        return false;
     } else {
         setbuf(log_stream, NULL);
         rte_openlog_stream(log_stream);
@@ -422,10 +426,11 @@ dpdk_init__(const struct smap *ovs_other_config)
 
     /* Make sure things are initialized ... */
     result = rte_eal_init(argc, argv);
-    if (result < 0) {
-        ovs_abort(result, "Cannot init EAL");
-    }
     argv_release(argv, argv_to_release, argc);
+    if (result < 0) {
+        VLOG_ERR("Cannot init EAL (%s)", ovs_strerror(rte_errno));
+        return false;
+    }
 
     /* Set the main thread affinity back to pre rte_eal_init() value */
     if (auto_determine && !err) {
@@ -459,15 +464,16 @@ dpdk_init__(const struct smap *ovs_other_config)
 
     /* Finally, register the dpdk classes */
     netdev_dpdk_register();
+    return true;
 }
 
-void
+bool
 dpdk_init(const struct smap *ovs_other_config)
 {
     static bool enabled = false;
 
-    if (enabled || !ovs_other_config) {
-        return;
+    if (!ovs_other_config) {
+        return enabled;
     }
 
     if (smap_get_bool(ovs_other_config, "dpdk-init", false)) {
@@ -476,14 +482,20 @@ dpdk_init(const struct smap *ovs_other_config)
         if (ovsthread_once_start(&once_enable)) {
             VLOG_INFO("Using %s", rte_version());
             VLOG_INFO("DPDK Enabled - initializing...");
-            dpdk_init__(ovs_other_config);
-            enabled = true;
-            VLOG_INFO("DPDK Enabled - initialized");
-            ovsthread_once_done(&once_enable);
+            if (dpdk_init__(ovs_other_config)) {
+                enabled = true;
+                VLOG_INFO("DPDK Enabled - initialized");
+                ovsthread_once_done(&once_enable);
+            } else {
+                enabled = false;
+                ovsthread_once_incomplete(&once_enable);
+            }
         }
     } else {
         VLOG_INFO_ONCE("DPDK Disabled - Use other_config:dpdk-init to enable");
     }
+
+    return enabled;
 }
 
 const char *

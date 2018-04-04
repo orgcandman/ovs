@@ -430,6 +430,14 @@ ovsthread_once_start__(struct ovsthread_once *once)
 }
 
 void
+ovsthread_once_incomplete(struct ovsthread_once *once)
+{
+    /* Since no stores are taking place (we are merely exiting
+     * the critical section), just unlock the mutex. */
+    ovs_mutex_unlock(&once->mutex);
+}
+
+void
 ovsthread_once_done(struct ovsthread_once *once)
 {
     /* We need release semantics here, so that the following store may not
