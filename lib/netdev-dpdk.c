@@ -2859,7 +2859,7 @@ netdev_dpdk_vhost_user_get_status(const struct netdev *netdev,
 
     for (int i = 0; i < vring_num; i++) {
         struct rte_vhost_vring vring;
-        char vhost_vring[16];
+        char vhost_vring[18];
 
         rte_vhost_get_vhost_vring(vid, i, &vring);
         snprintf(vhost_vring, 16, "vring_%d_size", i);
