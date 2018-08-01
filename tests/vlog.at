@@ -120,7 +120,8 @@ on_exit 'kill `cat test-unixctl.pid`'
 
 AT_CAPTURE_FILE([log])
 AT_CAPTURE_FILE([log.old])
-AT_CHECK([ovstest test-unixctl --log-file=`pwd`/log --pidfile --detach],
+AT_CHECK([ovstest test-unixctl -vsyslog:off \
+                               --log-file=`pwd`/log --pidfile --detach],
   [0], [], [stderr])
 AT_CHECK([vlog_filt stderr], [0],
   [opened log file
@@ -181,7 +182,7 @@ VLOG_REOPEN_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 AT_SETUP([vlog - vlog/reopen without log file - C])
 on_exit 'kill `cat test-unixctl.pid`'
 
-AT_CHECK([ovstest test-unixctl --pidfile --detach])
+AT_CHECK([ovstest test-unixctl -vsyslog:off --pidfile --detach])
 
 AT_CHECK([APPCTL -t test-unixctl vlog/reopen], [2], [],
   [Logging to file not configured
@@ -214,7 +215,8 @@ AT_SKIP_IF([echo > /dev/full])
 
 on_exit 'kill `cat test-unixctl.pid`'
 
-AT_CHECK([ovstest test-unixctl --log-file=`pwd`/log --pidfile --detach],
+AT_CHECK([ovstest test-unixctl -vsyslog:off \
+                               --log-file=`pwd`/log --pidfile --detach],
   [0], [], [stderr])
 AT_CHECK([vlog_filt stderr], [0], [opened log file
 ])
@@ -280,7 +282,8 @@ on_exit 'kill `cat test-unixctl.pid`'
 
 AT_CAPTURE_FILE([log])
 AT_CAPTURE_FILE([log.old])
-AT_CHECK([ovstest test-unixctl --log-file=`pwd`/log --pidfile --detach],
+AT_CHECK([ovstest test-unixctl -vsyslog:off \
+                               --log-file=`pwd`/log --pidfile --detach],
   [0], [], [ignore])
 AT_CHECK([vlog_filt log], [0], [opened log file
 Entering run loop.

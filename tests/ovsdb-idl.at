@@ -37,7 +37,8 @@ m4_define([OVSDB_CHECK_IDL_C],
    AT_CHECK([ovsdb_start_idltest])
    m4_if([$2], [], [],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
-   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 idl unix:socket $3],
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' \
+                        -vjsonrpc -vsyslog:off -t10 idl unix:socket $3],
             [0], [stdout], [ignore])
    AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
             [0], [$4])
@@ -848,7 +849,8 @@ AT_KEYWORDS([ovsdb server idl positive])
 # expects them to be there, so this test checks that it properly
 # tolerates them being missing.
 AT_CHECK([ovsdb_start_idltest "" "$abs_srcdir/idltest2.ovsschema"])
-AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 idl unix:socket ['["idltest",
+AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' \
+                     -vjsonrpc -vsyslog:off -t10 idl unix:socket ['["idltest",
       {"op": "insert",
        "table": "link1",
        "row": {"i": 0, "k": ["named-uuid", "self"]},
@@ -1071,7 +1073,8 @@ m4_define([OVSDB_CHECK_IDL_TRACK_C],
    AT_CHECK([ovsdb_start_idltest])
    m4_if([$2], [], [],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
-   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl unix:socket $3],
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' \
+                        -vjsonrpc -vsyslog:off -t10 -c idl unix:socket $3],
             [0], [stdout], [ignore])
    AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
             [0], [$4])
@@ -1200,7 +1203,9 @@ m4_define([OVSDB_CHECK_IDL_PARTIAL_UPDATE_MAP_COLUMN],
    AT_CHECK([ovsdb_start_idltest])
    m4_if([$2], [], [],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
-   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl-partial-update-map-column unix:socket $3],
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m'             \
+                        -vjsonrpc -vsyslog:off -t10                      \
+                        -c idl-partial-update-map-column unix:socket $3],
             [0], [stdout], [ignore])
    AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
             [0], [$4])
@@ -1249,7 +1254,9 @@ m4_define([OVSDB_CHECK_IDL_PARTIAL_UPDATE_SET_COLUMN],
    AT_CHECK([ovsdb_start_idltest])
    m4_if([$2], [], [],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
-   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl-partial-update-set-column unix:socket $3],
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m'             \
+                        -vjsonrpc -vsyslog:off -t10                      \
+                        -c idl-partial-update-set-column unix:socket $3],
             [0], [stdout], [ignore])
    AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
             [0], [$4])
@@ -1428,7 +1435,9 @@ m4_define([OVSDB_CHECK_IDL_COMPOUND_INDEX_SINGLE_COLUMN_C],
    m4_if([$2], [], [],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
 # Generate the data to be tested.
-   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl-compound-index unix:socket $3],
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' \
+                        -vjsonrpc -vsyslog:off -t10          \
+                        -c idl-compound-index unix:socket $3],
             [0], [stdout], [ignore])
 # Filter the rows of data that corresponds to the string index eliminating the extra columns of data.
 # This is done to verifiy that the output data is in the correct and expected order.
@@ -1565,7 +1574,9 @@ m4_define([OVSDB_CHECK_IDL_COMPOUND_INDEX_DOUBLE_COLUMN_C],
    m4_if([$2], [], [],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
 # Generate the data to be tested.
-   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl-compound-index unix:socket $3],
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' \
+                        -vjsonrpc -vsyslog:off -t10          \
+                        -c idl-compound-index unix:socket $3],
             [0], [stdout], [ignore])
 # Filter the rows of data that corresponds to the string-integer index eliminating the extra columns of data.
 # This is done to verifiy that the output data is in the correct and expected order.
@@ -1703,7 +1714,9 @@ m4_define([OVSDB_CHECK_IDL_COMPOUND_INDEX_WITH_REF],
    AT_CHECK([ovsdb_start_idltest])
    m4_if([$2], [], [],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
-   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl-compound-index-with-ref unix:socket $3],
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m'           \
+                        -vjsonrpc -vsyslog:off -t10                    \
+                        -c idl-compound-index-with-ref unix:socket $3],
             [0], [stdout], [ignore])
    AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
             [0], [$4])

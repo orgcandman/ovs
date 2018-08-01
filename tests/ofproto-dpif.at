@@ -5991,7 +5991,9 @@ m4_define([CHECK_SFLOW_SAMPLING_PACKET],
   OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
 
   on_exit 'kill `cat test-sflow.pid`'
-  AT_CHECK([ovstest test-sflow --log-file --detach --no-chdir --pidfile 0:$1 > sflow.log], [0], [], [ignore])
+  AT_CHECK([ovstest test-sflow -vsyslog:off --log-file \
+                               --detach --no-chdir --pidfile 0:$1 > sflow.log],
+           [0], [], [ignore])
   AT_CAPTURE_FILE([sflow.log])
   PARSE_LISTENING_PORT([test-sflow.log], [SFLOW_PORT])
   ovs-appctl time/stop
@@ -6542,7 +6544,9 @@ OVS_VSWITCHD_START([dnl
                     other_config:lacp-aggregation-key=3333 ])
 
 on_exit 'kill `cat test-sflow.pid`'
-AT_CHECK([ovstest test-sflow --log-file --detach --no-chdir --pidfile 0:127.0.0.1 > sflow.log], [0], [], [ignore])
+AT_CHECK([ovstest test-sflow -vsyslog:off --log-file --detach --no-chdir \
+                             --pidfile 0:127.0.0.1 > sflow.log],
+         [0], [], [ignore])
 AT_CAPTURE_FILE([sflow.log])
 PARSE_LISTENING_PORT([test-sflow.log], [SFLOW_PORT])
 
@@ -6586,7 +6590,9 @@ AT_XFAIL_IF([test "$IS_WIN32" = "yes"])
 OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
 
 dnl set up sFlow logging
-AT_CHECK([ovstest test-sflow --log-file --detach --no-chdir --pidfile 0:127.0.0.1 > sflow.log], [0], [], [ignore])
+AT_CHECK([ovstest test-sflow -vsyslog:off --log-file --detach --no-chdir \
+                             --pidfile 0:127.0.0.1 > sflow.log],
+         [0], [], [ignore])
 AT_CAPTURE_FILE([sflow.log])
 PARSE_LISTENING_PORT([test-sflow.log], [SFLOW_PORT])
 ovs-appctl time/stop
@@ -6656,7 +6662,9 @@ AT_XFAIL_IF([test "$IS_WIN32" = "yes"])
 OVS_VSWITCHD_START([add-port br0 p0 -- set Interface p0 type=dummy ofport_request=1 options:ifindex=1010])
 
 dnl set up sFlow logging
-AT_CHECK([ovstest test-sflow --log-file --detach --no-chdir --pidfile 0:127.0.0.1 > sflow.log], [0], [], [ignore])
+AT_CHECK([ovstest test-sflow -vsyslog:off --log-file --detach --no-chdir \
+                             --pidfile 0:127.0.0.1 > sflow.log],
+         [0], [], [ignore])
 AT_CAPTURE_FILE([sflow.log])
 PARSE_LISTENING_PORT([test-sflow.log], [SFLOW_PORT])
 ovs-appctl time/stop
@@ -6764,7 +6772,9 @@ table=0 dl_src=50:54:00:00:00:0b actions=pop_mpls:0x0800,2
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 dnl set up sFlow logging
-AT_CHECK([ovstest test-sflow --log-file --detach --no-chdir --pidfile 0:127.0.0.1 > sflow.log], [0], [], [ignore])
+AT_CHECK([ovstest test-sflow -vsyslog:off --log-file --detach --no-chdir \
+                             --pidfile 0:127.0.0.1 > sflow.log],
+         [0], [], [ignore])
 AT_CAPTURE_FILE([sflow.log])
 PARSE_LISTENING_PORT([test-sflow.log], [SFLOW_PORT])
 ovs-appctl time/stop
@@ -6858,7 +6868,9 @@ m4_define([CHECK_NETFLOW_EXPIRATION],
 
   ovs-appctl time/stop
   on_exit 'kill `cat test-netflow.pid`'
-  AT_CHECK([ovstest test-netflow --log-file --detach --no-chdir --pidfile 0:$1 > netflow.log], [0], [], [ignore])
+  AT_CHECK([ovstest test-netflow -vsyslog:off --log-file --detach --no-chdir \
+                                 --pidfile 0:$1 > netflow.log],
+           [0], [], [ignore])
   AT_CAPTURE_FILE([netflow.log])
   PARSE_LISTENING_PORT([test-netflow.log], [NETFLOW_PORT])
 
@@ -6905,7 +6917,9 @@ m4_define([CHECK_NETFLOW_ACTIVE_EXPIRATION],
   add_of_ports br0 1 2
 
   on_exit 'kill `cat test-netflow.pid`'
-  AT_CHECK([ovstest test-netflow --log-file --detach --no-chdir --pidfile 0:$1 > netflow.log], [0], [], [ignore])
+  AT_CHECK([ovstest test-netflow -vsyslog:off --log-file --detach --no-chdir \
+                                 --pidfile 0:$1 > netflow.log],
+           [0], [], [ignore])
   AT_CAPTURE_FILE([netflow.log])
   PARSE_LISTENING_PORT([test-netflow.log], [NETFLOW_PORT])
 
@@ -8195,7 +8209,9 @@ m4_define([CHECK_MEGAFLOW_NETFLOW],
 
   dnl NetFlow configuration disables wildcarding relevant fields
   on_exit 'kill `cat test-netflow.pid`'
-  AT_CHECK([ovstest test-netflow --log-file --detach --no-chdir --pidfile 0:$1 > netflow.log], [0], [], [ignore])
+  AT_CHECK([ovstest test-netflow -vsyslog:off --log-file --detach --no-chdir \
+                                 --pidfile 0:$1 > netflow.log],
+           [0], [], [ignore])
   AT_CAPTURE_FILE([netflow.log])
   PARSE_LISTENING_PORT([test-netflow.log], [NETFLOW_PORT])
   ovs-vsctl \
