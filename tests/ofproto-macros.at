@@ -112,7 +112,7 @@ as() {
          cmd=$1; shift;
          for util in $OVS_UTILS_LIST; do
              if test "X$util" == "X$cmd"; then
-                 $cmd --timeout=$OVS_TIMEOUT "$@"
+                 $cmd $OVS_UTILS_DEFAULT_OPTIONS "$@"
                  exit "$?"
              fi
          done

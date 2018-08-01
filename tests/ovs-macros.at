@@ -114,7 +114,7 @@ if test "$IS_WIN32" = "yes"; then
     }
 fi
 
-# Try to add a default timeout for the following control utilities:
+# Try to add a default options for the following control utilities:
 #     - ovs-vsctl
 #     - ovs-ofctl
 #     - ovs-appctl
@@ -123,11 +123,13 @@ fi
 #     - vtep-ctl
 # Set default timeout for 30 seconds.
 # This should be sufficient on all platforms.
+# Disable unwanted logging to syslog.
 OVS_TIMEOUT=30
+OVS_UTILS_DEFAULT_OPTIONS="-vsyslog:off --timeout=$OVS_TIMEOUT"
 OVS_UTILS_LIST="ovs-vsctl ovs-ofctl ovs-appctl ovn-sbctl ovn-nbctl
                 vtep-ctl ovsdb-client"
 for util in $OVS_UTILS_LIST; do
-    alias $util="$util --timeout=$OVS_TIMEOUT" >/dev/null 2>&1
+    alias $util="$util $OVS_UTILS_DEFAULT_OPTIONS" >/dev/null 2>&1
 done
 
 # parent_pid PID
