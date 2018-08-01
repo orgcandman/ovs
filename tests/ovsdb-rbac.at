@@ -115,7 +115,8 @@ AT_CHECK(
                 "update": ["set", ["name", "value"]]}}
 ]']], [0], [ignore], [ignore])
 
-AT_CHECK([ovsdb-server --log-file --detach --no-chdir --pidfile --remote=db:mydb,Root,connections \
+AT_CHECK([ovsdb-server -vsyslog:off --log-file --detach --no-chdir --pidfile \
+        --remote=db:mydb,Root,connections \
         --private-key=$RBAC_PKIDIR/ovsdb-server-privkey.pem \
         --certificate=$RBAC_PKIDIR/ovsdb-server-cert.pem \
         --ca-cert=$RBAC_PKIDIR/pki/switchca/cacert.pem \

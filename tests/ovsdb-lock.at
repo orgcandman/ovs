@@ -13,7 +13,11 @@ m4_define([OVSDB_CHECK_LOCK_SETUP],
     ordinal_schema > schema
     AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
     AT_CAPTURE_FILE([ovsdb-server-log])
-    AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file="`pwd`"/ovsdb-server-log db >/dev/null 2>&1], [0], [], [])])
+    AT_CHECK([ovsdb-server -vsyslog:off --detach --no-chdir --pidfile \
+                           --remote=punix:socket                      \
+                           --log-file="`pwd`"/ovsdb-server-log        \
+                           db >/dev/null 2>&1],
+             [0], [], [])])
 
 #
 # Two sessions create two locks. Both sessions should be able to get their

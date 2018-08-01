@@ -8,7 +8,9 @@ m4_divert_text([PREPARE_TESTS], [
 # specified).
 ovsdb_start_idltest () {
     ovsdb-tool create db ${2:-$abs_srcdir/idltest.ovsschema} || return $?
-    ovsdb-server -vconsole:warn --log-file --detach --no-chdir --pidfile --remote=punix:socket ${1:+--remote=$1} db || return $?
+    ovsdb-server -vsyslog:off -vconsole:warn --log-file --pidfile \
+                 --detach --no-chdir \
+                 --remote=punix:socket ${1:+--remote=$1} db || return $?
     on_exit 'kill `cat ovsdb-server.pid`'
 }
 ])
@@ -144,8 +146,8 @@ m4_define([OVSDB_CHECK_IDL_SSL_PYN],
    AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
              [0], [stdout], [ignore])
    PKIDIR=$abs_top_builddir/tests
-   AT_CHECK([ovsdb-server -vconsole:warn --log-file --detach --no-chdir \
-             --pidfile \
+   AT_CHECK([ovsdb-server -vsyslog:off -vconsole:warn --log-file \
+             --detach --no-chdir --pidfile \
              --private-key=$PKIDIR/testpki-privkey2.pem \
              --certificate=$PKIDIR/testpki-cert2.pem \
              --ca-cert=$PKIDIR/testpki-cacert.pem \

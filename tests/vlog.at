@@ -462,7 +462,7 @@ dnl Create database.
 touch .conf.db.~lock~
 AT_CHECK([ovsdb-tool create conf.db $abs_top_srcdir/vswitchd/vswitch.ovsschema])
 
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile \
+AT_CHECK([ovsdb-server -vsyslog:off --detach --no-chdir --pidfile \
           --remote=punix:$OVS_RUNDIR/db.sock -vPATTERN:file:"<%B>1 %A %m" \
           --log-file], [0], [], [stderr])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
@@ -472,7 +472,7 @@ AT_CHECK([head -1 ovsdb-server.log | awk '{print $1}'], [0], [<133>1
 ])
 rm ovsdb-server.log
 
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile \
+AT_CHECK([ovsdb-server -vsyslog:off --detach --no-chdir --pidfile \
           --remote=punix:$OVS_RUNDIR/db.sock -vPATTERN:file:"<%B>1 %A %m" \
           -vFACILITY:daemon --log-file], [0], [], [stderr])
 

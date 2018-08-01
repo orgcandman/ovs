@@ -12,11 +12,15 @@ touch .conf.db.~lock~
 AT_CHECK([ovsdb-tool create conf.db $abs_top_srcdir/vswitchd/vswitch.ovsschema])
 
 dnl Start ovsdb-server.  *Don't* initialize database.
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --log-file --remote=punix:$OVS_RUNDIR/db.sock], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server -vsyslog:off --detach --no-chdir --pidfile --log-file \
+                       --remote=punix:$OVS_RUNDIR/db.sock],
+         [0], [ignore], [ignore])
 AT_CAPTURE_FILE([ovsdb-server.log])
 
 dnl Start ovs-vswitchd.
-AT_CHECK([ovs-vswitchd --detach --no-chdir --pidfile --enable-dummy --disable-system --log-file], [0], [], [stderr])
+AT_CHECK([ovs-vswitchd -vsyslog:off --detach --no-chdir --pidfile \
+                       --enable-dummy --disable-system --log-file],
+         [0], [], [stderr])
 AT_CAPTURE_FILE([ovs-vswitchd.log])
 
 dnl ovs-vswitchd detached OK or we wouldn't have made it this far.  Success.
@@ -70,7 +74,8 @@ AT_SETUP([ovs-vswitchd -- start additional ovs-vswitchd process])
 OVS_VSWITCHD_START
 
 # start another ovs-vswitchd process.
-ovs-vswitchd --log-file=fakelog --unixctl=unixctl2 --pidfile=ovs-vswitchd-2.pid &
+ovs-vswitchd -vsyslog:off --log-file=fakelog \
+             --unixctl=unixctl2 --pidfile=ovs-vswitchd-2.pid &
 on_exit 'kill `cat ovs-vswitchd-2.pid`'
 
 # sleep for a while
@@ -95,7 +100,8 @@ AT_SETUP([ovs-vswitchd -- switch over to another ovs-vswitchd process])
 OVS_VSWITCHD_START
 
 # start a new ovs-vswitchd process.
-ovs-vswitchd --log-file=fakelog --enable-dummy --unixctl=unixctl2 --pidfile=ovs-vswitchd-2.pid &
+ovs-vswitchd -vsyslog:off --log-file=fakelog --enable-dummy \
+             --unixctl=unixctl2 --pidfile=ovs-vswitchd-2.pid &
 on_exit 'kill `cat ovs-vswitchd-2.pid`'
 
 # sleep for a while.
@@ -134,7 +140,8 @@ dnl ----------------------------------------------------------------------
 AT_SETUP([ovs-vswitchd -- invalid database path])
 
 # start an ovs-vswitchd process with invalid db path.
-ovs-vswitchd unix:invalid.db.sock --log-file --enable-dummy --pidfile &
+ovs-vswitchd -vsyslog:off unix:invalid.db.sock --log-file --pidfile \
+             --enable-dummy &
 on_exit 'kill `cat ovs-vswitchd.pid`'
 
 # sleep for a while.

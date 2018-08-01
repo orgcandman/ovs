@@ -54,7 +54,7 @@ m4_define([PARSE_LISTENING_PORT],
     [OVS_WAIT_UNTIL([$2=`sed -n 's/.*0:.*: listening on port \([[0-9]]*\)$/\1/p' "$1"` && test X != X"[$]$2"])])
 
 start_daemon () {
-    "$@" -vconsole:off --detach --no-chdir --pidfile --log-file
+    "$@" -vconsole:off -vsyslog:off --detach --no-chdir --pidfile --log-file
     pidfile="$OVS_RUNDIR"/$1.pid
     on_exit "test -e \"$pidfile\" && kill \`cat \"$pidfile\"\`"
 }
@@ -335,7 +335,9 @@ m4_define([_OVS_VSWITCHD_START],
    AT_CHECK([ovsdb-tool create conf.db $abs_top_srcdir/vswitchd/vswitch.ovsschema])
 
    dnl Start ovsdb-server.
-   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --log-file --remote=punix:$OVS_RUNDIR/db.sock], [0], [], [stderr])
+   AT_CHECK([ovsdb-server -vsyslog:off --detach --no-chdir --pidfile \
+                          --log-file --remote=punix:$OVS_RUNDIR/db.sock],
+            [0], [], [stderr])
    on_exit "kill `cat ovsdb-server.pid`"
    AT_CHECK([[sed < stderr '
 /vlog|INFO|opened log file/d
@@ -346,7 +348,9 @@ m4_define([_OVS_VSWITCHD_START],
    AT_CHECK([ovs-vsctl --no-wait init $2])
 
    dnl Start ovs-vswitchd.
-   AT_CHECK([ovs-vswitchd $1 --detach --no-chdir --pidfile --log-file -vvconn -vofproto_dpif -vunixctl], [0], [], [stderr])
+   AT_CHECK([ovs-vswitchd $1 -vvconn -vofproto_dpif -vunixctl -vsyslog:off \
+                             --detach --no-chdir --pidfile --log-file],
+            [0], [], [stderr])
    AT_CAPTURE_FILE([ovs-vswitchd.log])
    on_exit "kill_ovs_vswitchd `cat ovs-vswitchd.pid`"
    AT_CHECK([[sed < stderr '

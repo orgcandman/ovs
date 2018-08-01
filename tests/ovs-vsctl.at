@@ -4,7 +4,9 @@ dnl Creates an empty database in the current directory and then starts
 dnl an ovsdb-server on it for ovs-vsctl to connect to.
 m4_define([OVS_VSCTL_SETUP],
   [OVSDB_INIT([db])
-   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:db.sock db >/dev/null 2>&1], [0], [ignore], [ignore])
+   AT_CHECK([ovsdb-server -vsyslog:off --detach --no-chdir --pidfile \
+                          --remote=punix:db.sock db >/dev/null 2>&1],
+            [0], [ignore], [ignore])
    on_exit 'kill `cat ovsdb-server.pid`'])
 
 dnl OVS_VSCTL_CLEANUP
@@ -1378,7 +1380,13 @@ AT_CHECK([$OVS_PKI -B 1024 init && $OVS_PKI -B 1024 req+sign vsctl switch && $OV
 
 dnl Create database.
 OVSDB_INIT([conf.db])
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --private-key=$PKIDIR/ovsdbserver-privkey.pem --certificate=$PKIDIR/ovsdbserver-cert.pem --ca-cert=$PKIDIR/pki/switchca/cacert.pem --remote=pssl:0:127.0.0.1 --log-file="`pwd`"/ovsdb-server.log conf.db], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server -vsyslog:off --detach --no-chdir --pidfile    \
+                       --private-key=$PKIDIR/ovsdbserver-privkey.pem \
+                       --certificate=$PKIDIR/ovsdbserver-cert.pem    \
+                       --ca-cert=$PKIDIR/pki/switchca/cacert.pem     \
+                       --remote=pssl:0:127.0.0.1                     \
+                       --log-file="`pwd`"/ovsdb-server.log conf.db],
+         [0], [ignore], [ignore])
 on_exit "kill `cat ovsdb-server.pid`"
 PARSE_LISTENING_PORT([ovsdb-server.log], [SSL_PORT])
 
@@ -1405,7 +1413,14 @@ AT_CHECK([$OVS_PKI -B 1024 init && $OVS_PKI -B 1024 req+sign vsctl switch && $OV
 
 dnl Create database.
 OVSDB_INIT([conf.db])
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --private-key=$PKIDIR/ovsdbserver-privkey.pem --certificate=$PKIDIR/ovsdbserver-cert.pem --ca-cert=$PKIDIR/pki/switchca/cacert.pem --peer-ca-cert=$PKIDIR/pki/controllerca/cacert.pem --remote=pssl:0:127.0.0.1 --log-file="`pwd`"/ovsdb-server.log conf.db], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server -vsyslog:off --detach --no-chdir --pidfile         \
+                       --private-key=$PKIDIR/ovsdbserver-privkey.pem      \
+                       --certificate=$PKIDIR/ovsdbserver-cert.pem         \
+                       --ca-cert=$PKIDIR/pki/switchca/cacert.pem          \
+                       --peer-ca-cert=$PKIDIR/pki/controllerca/cacert.pem \
+                       --remote=pssl:0:127.0.0.1                          \
+                       --log-file="`pwd`"/ovsdb-server.log conf.db],
+         [0], [ignore], [ignore])
 on_exit "kill `cat ovsdb-server.pid`"
 PARSE_LISTENING_PORT([ovsdb-server.log], [SSL_PORT])
 
