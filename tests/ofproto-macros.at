@@ -107,7 +107,17 @@ sim_add () {
 # there.
 as() {
     if test "X$2" != X; then
-        (ovs_setenv $1; shift; "$@")
+        (
+         ovs_setenv $1; shift;
+         cmd=$1; shift;
+         for util in $OVS_UTILS_LIST; do
+             if test "X$util" == "X$cmd"; then
+                 $cmd --timeout=$OVS_TIMEOUT "$@"
+                 exit "$?"
+             fi
+         done
+         $cmd "$@"
+        )
     else
         ovs_setenv $1
     fi
