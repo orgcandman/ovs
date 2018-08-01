@@ -3291,14 +3291,14 @@ check_async () {
     : > expout
 
     # OFPT_PACKET_IN, OFPR_ACTION (controller_id=0)
-    ovs-ofctl -v packet-out br0 controller controller '0001020304050010203040501234'
+    ovs-ofctl packet-out br0 controller controller '0001020304050010203040501234'
     if test X"$1" = X"OFPR_ACTION"; then shift;
         echo >>expout "OFPT_PACKET_IN: total_len=14 in_port=CONTROLLER (via action) data_len=14 (unbuffered)
 vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234"
     fi
 
     # OFPT_PACKET_IN, OFPR_NO_MATCH (controller_id=123)
-    ovs-ofctl -v packet-out br0 controller 'controller(reason=no_match,id=123)' '0001020304050010203040501234'
+    ovs-ofctl packet-out br0 controller 'controller(reason=no_match,id=123)' '0001020304050010203040501234'
     if test X"$1" = X"OFPR_NO_MATCH"; then shift;
         echo >>expout "OFPT_PACKET_IN: total_len=14 in_port=CONTROLLER (via no_match) data_len=14 (unbuffered)
 vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234"
@@ -3394,14 +3394,14 @@ check_async () {
     : > expout
 
     # OFPT_PACKET_IN, OFPR_ACTION (controller_id=0)
-    ovs-ofctl -O OpenFlow12 -v packet-out br0 none controller '0001020304050010203040501234'
+    ovs-ofctl -O OpenFlow12 packet-out br0 none controller '0001020304050010203040501234'
     if test X"$1" = X"OFPR_ACTION"; then shift;
         echo >>expout "OFPT_PACKET_IN (OF1.2): total_len=14 in_port=ANY (via action) data_len=14 (unbuffered)
 vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234"
     fi
 
     # OFPT_PACKET_IN, OFPR_NO_MATCH (controller_id=123)
-    ovs-ofctl -O OpenFlow12 -v packet-out br0 none 'controller(reason=no_match,id=123)' '0001020304050010203040501234'
+    ovs-ofctl -O OpenFlow12 packet-out br0 none 'controller(reason=no_match,id=123)' '0001020304050010203040501234'
     if test X"$1" = X"OFPR_NO_MATCH"; then shift;
         echo >>expout "OFPT_PACKET_IN (OF1.2): total_len=14 in_port=ANY (via no_match) data_len=14 (unbuffered)
 vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234"
@@ -3500,7 +3500,7 @@ check_async () {
 
     # OFPT_PACKET_IN, OFPR_ACTION (controller_id=0)
     # OFPR_ACTION_SET is treated as OFPR_ACTION in OpenFlow 1.3
-    ovs-ofctl -O OpenFlow13 -v packet-out br0 none controller '0001020304050010203040501234'
+    ovs-ofctl -O OpenFlow13 packet-out br0 none controller '0001020304050010203040501234'
     ovs-ofctl -O OpenFlow13 add-flow br0 'in_port=10 actions=write_actions(output(CONTROLLER))'
     ovs-appctl netdev-dummy/receive p1 'in_port(10),eth(src=00:10:20:30:40:50,dst=00:01:02:03:04:05),eth_type(0x1234)'
     if test X"$1" = X"OFPR_ACTION"; then shift;
@@ -3511,7 +3511,7 @@ vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234
     fi
 
     # OFPT_PACKET_IN, OFPR_NO_MATCH (controller_id=123)
-    ovs-ofctl -O OpenFlow13 -v packet-out br0 none 'controller(reason=no_match,id=123)' '0001020304050010203040501234'
+    ovs-ofctl -O OpenFlow13 packet-out br0 none 'controller(reason=no_match,id=123)' '0001020304050010203040501234'
     if test X"$1" = X"OFPR_NO_MATCH"; then shift;
         echo >>expout "OFPT_PACKET_IN (OF1.3): total_len=14 in_port=ANY (via no_match) data_len=14 (unbuffered)
 vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234"
@@ -3614,7 +3614,7 @@ check_async () {
     : > expout
 
     # OFPT_PACKET_IN, OFPR_PACKET_OUT (controller_id=0)
-    ovs-ofctl -O OpenFlow14 -v packet-out br0 none controller '0001020304050010203040501234'
+    ovs-ofctl -O OpenFlow14 packet-out br0 none controller '0001020304050010203040501234'
     if test X"$1" = X"OFPR_PACKET_OUT"; then shift;
         echo >>expout "OFPT_PACKET_IN (OF1.4): total_len=14 in_port=ANY (via packet_out) data_len=14 (unbuffered)
 vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234"
@@ -3629,7 +3629,7 @@ vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234
     fi
 
     # OFPT_PACKET_IN, OFPR_NO_MATCH (controller_id=123)
-    ovs-ofctl -O OpenFlow14 -v packet-out br0 none 'controller(reason=no_match,id=123)' '0001020304050010203040501234'
+    ovs-ofctl -O OpenFlow14 packet-out br0 none 'controller(reason=no_match,id=123)' '0001020304050010203040501234'
     if test X"$1" = X"OFPR_NO_MATCH"; then shift;
         echo >>expout "OFPT_PACKET_IN (OF1.4): total_len=14 in_port=ANY (via no_match) data_len=14 (unbuffered)
 vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234"
