@@ -182,7 +182,7 @@ OVS_VSWITCHD_START([add-port br0 p0 -- set Interface p0 ofport_request=7 type=du
 CHECK_CPU_DISCOVERED()
 CHECK_PMD_THREADS_CREATED()
 
-AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg])
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:file:dbg])
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
 AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:emc-insert-inv-prob=1])
 AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:smc-enable=true])
@@ -250,7 +250,7 @@ OVS_VSWITCHD_START(
   [add-port br0 p1 -- set Interface p1 type=dummy-pmd ofport_request=1 options:n_rxq=2 -- \
    add-port br0 p2 -- set Interface p2 type=dummy-pmd ofport_request=2
 ], [], [], [--dummy-numa 0])
-AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg])
 
 AT_CHECK([ovs-ofctl add-flow br0 action=controller])
 
@@ -313,7 +313,7 @@ OVS_VSWITCHD_START(
   [add-port br0 p1 -- set Interface p1 type=dummy-pmd ofport_request=1 options:n_rxq=2 -- \
    set Open_vSwitch . other_config:pmd-cpu-mask=3
 ], [], [], [--dummy-numa 0,0])
-AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg])
 
 AT_CHECK([ovs-ofctl add-flow br0 action=controller])
 
@@ -357,7 +357,7 @@ OVS_VSWITCHD_START(
    add-port br0 p2 -- set Interface p2 type=dummy-pmd ofport_request=2 options:n_rxq=2 -- \
    set Open_vSwitch . other_config:pmd-cpu-mask=3
 ], [], [], [--dummy-numa 0,1])
-AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg])
 
 AT_CHECK([ovs-ofctl add-flow br0 action=controller])
 
@@ -436,7 +436,7 @@ OVS_VSWITCHD_START(
    set Interface br0 options:tx_pcap=br0.pcap -- \
    set Open_vSwitch . other_config:pmd-cpu-mask=1
 ], [], [], [--dummy-numa 0,0])
-AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg])
 
 AT_CHECK([ovs-ofctl add-flow br0 actions=LOCAL])
 
@@ -482,7 +482,7 @@ AT_CLEANUP
 AT_SETUP([PMD - add remove ports])
 OVS_VSWITCHD_START(
   [], [], [], [--dummy-numa 0,0])
-AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg])
 
 AT_CHECK([ovs-ofctl add-flow br0 actions=controller])
 
@@ -526,7 +526,7 @@ AT_CLEANUP
 AT_SETUP([PMD - rxq affinity])
 OVS_VSWITCHD_START(
   [], [], [], [--dummy-numa 0,0,0,0,0,0,0,0,0])
-AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg])
 
 AT_CHECK([ovs-ofctl add-flow br0 actions=controller])
 
@@ -579,7 +579,7 @@ AT_CLEANUP
 AT_SETUP([PMD - rxq affinity - NUMA])
 OVS_VSWITCHD_START(
   [], [], [], [--dummy-numa 0,0,0,1,1])
-AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg])
 
 AT_CHECK([ovs-ofctl add-flow br0 actions=controller])
 
@@ -635,7 +635,7 @@ AT_CLEANUP
 AT_SETUP([PMD - monitor threads])
 OVS_VSWITCHD_START(
   [], [], [], [--dummy-numa 0,0])
-AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg])
 
 dnl The two devices are connected together externally using net.sock
 AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=dummy-pmd ofport_request=1 options:n_rxq=1 options:pstream=punix:$OVS_RUNDIR/net.sock])
@@ -672,7 +672,7 @@ AT_CLEANUP
 AT_SETUP([PMD - dpctl])
 OVS_VSWITCHD_START(
   [del-br br0], [], [], [--dummy-numa 0,0])
-AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg])
 
 AT_CHECK([ovs-appctl dpctl/add-dp dummy@dp0])
 AT_CHECK([ovs-appctl dpctl/add-if dummy@dp0 p1,type=dummy-pmd])

@@ -50,7 +50,7 @@ m4_divert_pop([PREPARE_TESTS])
 AT_SETUP([dpif-netdev - netdev-dummy/receive])
 # Create br0 with interfaces p0
 OVS_VSWITCHD_START([add-port br0 p1 -- set interface p1 type=dummy ofport_request=1 -- ])
-AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg])
 
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
 ovs-appctl time/stop
@@ -83,7 +83,7 @@ m4_define([DPIF_NETDEV_DUMMY_IFACE],
       add-port br1 p2 -- set interface p2 type=$1 options:stream=unix:$OVS_RUNDIR/p0.sock ofport_request=2 -- \
       add-port br1 p8 -- set interface p8 ofport_request=8 type=$1 --], [], [],
       [m4_if([$1], [dummy-pmd], [--dummy-numa="0,0,0,0,1,1,1,1"], [])])
-   AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+   AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg])
 
    AT_CHECK([ovs-ofctl add-flow br0 action=normal])
    AT_CHECK([ovs-ofctl add-flow br1 action=normal])
@@ -113,7 +113,7 @@ m4_define([DPIF_NETDEV_MISS_FLOW_INSTALL],
      [add-port br0 p1 -- set interface p1 type=$1 options:pstream=punix:$OVS_RUNDIR/p0.sock
       set bridge br0 datapath-type=dummy other-config:datapath-id=1234 fail-mode=secure], [], [],
       [m4_if([$1], [dummy-pmd], [--dummy-numa="0,0,0,0,1,1,1,1"], [])])
-   AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+   AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg])
 
    AT_CHECK([ovs-ofctl add-flow br0 action=normal])
    AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
@@ -155,7 +155,7 @@ m4_define([DPIF_NETDEV_MISS_FLOW_DUMP],
       [m4_if([$1], [dummy-pmd], [--dummy-numa="0,0,0,0,1,1,1,1"], [])])
    AT_CHECK([ovs-appctl upcall/disable-ufid], [0], [Datapath dumping tersely using UFID disabled
 ], [])
-   AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+   AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg])
 
    AT_CHECK([ovs-ofctl add-flow br0 action=normal])
    AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
@@ -203,7 +203,7 @@ OVS_VSWITCHD_START(
                   fail-mode=secure -- \
    add-port br1 p2 -- set interface p2 type=dummy options:stream=unix:$OVS_RUNDIR/p0.sock ofport_request=2 -- \
    add-port br1 p8 -- set interface p8 ofport_request=8 type=dummy --])
-AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg])
 
 AT_CHECK([ovs-ofctl -O OpenFlow13 add-meter br0 'meter=1 pktps burst stats bands=type=drop rate=1 burst_size=1'])
 AT_CHECK([ovs-ofctl -O OpenFlow13 add-meter br0 'meter=2 kbps burst stats bands=type=drop rate=1 burst_size=2'])

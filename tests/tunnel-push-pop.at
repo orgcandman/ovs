@@ -516,7 +516,7 @@ AT_CLEANUP
 AT_SETUP([tunnel_push_pop - packet_out])
 
 OVS_VSWITCHD_START([add-port br0 p0 -- set Interface p0 type=dummy ofport_request=1 other-config:hwaddr=aa:55:aa:55:00:00])
-AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg])
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:file:dbg])
 AT_CHECK([ovs-vsctl add-br int-br -- set bridge int-br datapath_type=dummy])
 AT_CHECK([ovs-vsctl add-port int-br t2 -- set Interface t2 type=geneve \
                        options:remote_ip=1.1.2.92 options:key=123 ofport_request=2 \

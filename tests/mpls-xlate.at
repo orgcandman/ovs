@@ -155,7 +155,7 @@ OVS_VSWITCHD_START(
                                        options:peer=p1 -- \
    add-port br1 p3 -- set Interface p3 type=dummy ofport_request=3])
 
-AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg ofproto_dpif_upcall:dbg])
+AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg ofproto_dpif_upcall:file:dbg])
 
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:0
@@ -190,7 +190,7 @@ AT_SETUP([MPLS xlate action - group bucket])
 OVS_VSWITCHD_START
 add_of_ports br0 1
 
-AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg ofproto_dpif_upcall:dbg])
+AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg ofproto_dpif_upcall:file:dbg])
 
 AT_CHECK([ovs-ofctl del-flows br0])
 AT_CHECK([ovs-ofctl -O OpenFlow13 add-group br0 'group_id=1234,type=all,bucket=push_mpls:0x8847,output:1'])

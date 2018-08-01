@@ -3048,7 +3048,7 @@ AT_CLEANUP
 AT_SETUP([ovs-ofctl replace-flows with --bundle])
 OVS_VSWITCHD_START
 
-AT_CHECK([ovs-appctl vlog/set vconn:dbg])
+AT_CHECK([ovs-appctl vlog/set vconn:file:dbg])
 
 dnl Add flows to br0 with importance via OF1.4+, using an OF1.4+ bundle. For more details refer "ovs-ofctl rule with importance" test case.
 for i in 1 2 3 4 5 6 7 8; do echo "table=$i,dl_vlan=$i,importance=$i,actions=drop"; done > add-flows.txt
@@ -3176,7 +3176,7 @@ AT_CLEANUP
 AT_SETUP([ovs-ofctl ct-flush-zone])
 OVS_VSWITCHD_START
 
-AT_CHECK([ovs-appctl vlog/set ct_dpif:dbg])
+AT_CHECK([ovs-appctl vlog/set ct_dpif:file:dbg])
 AT_CHECK([ovs-ofctl ct-flush-zone br0 123])
 
 OVS_WAIT_UNTIL([grep -q "|ct_dpif|DBG|.*ct_flush:" ovs-vswitchd.log])

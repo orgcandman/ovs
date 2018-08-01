@@ -877,7 +877,7 @@ AT_BANNER([conntrack])
 AT_SETUP([conntrack - controller])
 CHECK_CONNTRACK()
 OVS_TRAFFIC_VSWITCHD_START()
-AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg ofproto_dpif_upcall:dbg])
+AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg ofproto_dpif_upcall:file:dbg])
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -921,7 +921,7 @@ AT_CLEANUP
 AT_SETUP([conntrack - force commit])
 CHECK_CONNTRACK()
 OVS_TRAFFIC_VSWITCHD_START()
-AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg ofproto_dpif_upcall:dbg])
+AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg ofproto_dpif_upcall:file:dbg])
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 

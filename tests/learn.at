@@ -665,7 +665,7 @@ AT_CLEANUP
 
 AT_SETUP([learning action - limit])
 OVS_VSWITCHD_START
-AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg])
 add_of_ports br0 1 2
 AT_DATA([flows.txt], [dnl
 table=0 in_port=1 actions=learn(table=1,dl_dst=dl_src,cookie=0x1,limit=1),2
@@ -704,7 +704,7 @@ AT_CLEANUP
 
 AT_SETUP([learning action - limit result_dst])
 OVS_VSWITCHD_START
-AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg])
 add_of_ports br0 1
 AT_DATA([flows.txt], [dnl
 table=0 in_port=1 actions=learn(table=1,dl_dst=dl_src,cookie=0x1,limit=1,result_dst=reg0[[0]]),controller
@@ -737,7 +737,7 @@ AT_CLEANUP
 
 AT_SETUP([learning action - different limits])
 OVS_VSWITCHD_START
-AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg])
 add_of_ports br0 1 2 3
 AT_DATA([flows.txt], [dnl
 table=0 in_port=1 udp,actions=learn(table=11,dl_type=0x0800,nw_proto=17,udp_src=udp_dst,limit=1,result_dst=reg0[[0]]),resubmit(,1)

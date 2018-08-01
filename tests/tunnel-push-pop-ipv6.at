@@ -92,7 +92,7 @@ AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: clone(tnl_push(tnl_port(6),header(size=74,type=108,eth(dst=f8:bc:12:44:34:b7,src=aa:55:aa:55:00:00,dl_type=0x86dd),ipv6(src=2001:cafe::88,dst=2001:cafe::93,label=0,proto=47,tclass=0x0,hlimit=64),erspan(ver=2,sid=0x237,dir=1,hwid=0x7)),out_port(100)),1)
 ])
 
-ovs-appctl vlog/set dbg
+ovs-appctl vlog/set file:dbg
 dnl Check decapsulation of ERSPAN v1
 dnl Hex dump: GRE:(100088be)
 dnl ERSPAN: v1, session id = 0x7b (1000007b), index=3 (00000003)
