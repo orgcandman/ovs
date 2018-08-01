@@ -136,7 +136,11 @@ ovsdb|WARN|schema: changed 2 columns in 'OVN_Southbound' database from ephemeral
     for i in $(seq 0 $(expr $n1 - 1) ); do
         (for j in $(seq $n2); do
              : > $i-$j.running
-             run_as "ovn-sbctl($i-$j)" ovn-sbctl "-vPATTERN:console:ovn-sbctl($i-$j)|%D{%H:%M:%S}|%05N|%c|%p|%m" --log-file=$i-$j.log -vfile -vsyslog:off -vtimeval:off --timeout=120 --no-leader-only add SB_Global . external_ids $i-$j=$i-$j
+             run_as "ovn-sbctl($i-$j)" \
+                ovn-sbctl "-vPATTERN:console:ovn-sbctl($i-$j)|%D{%H:%M:%S}|%05N|%c|%p|%m" \
+                    -vfile -vsyslog:off -vtimeval:off --log-file=$i-$j.log \
+                    --timeout=120 --no-leader-only \
+                    add SB_Global . external_ids $i-$j=$i-$j
              status=$?
              if test $status != 0; then
                  echo "$i-$j exited with status $status" > $i-$j:$status
