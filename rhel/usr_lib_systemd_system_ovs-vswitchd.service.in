@@ -21,10 +21,10 @@ ExecStartPre=-/usr/bin/chmod 0775 /dev/hugepages
 ExecStart=/usr/share/openvswitch/scripts/ovs-ctl \
           --no-ovsdb-server --no-monitor --system-id=random \
           ${OVSUSER} \
-          start $OPTIONS
+          start $OPTIONS $OVS_CTL_OPTS
 ExecStop=/usr/share/openvswitch/scripts/ovs-ctl --no-ovsdb-server stop
 ExecReload=/usr/share/openvswitch/scripts/ovs-ctl --no-ovsdb-server \
           --no-monitor --system-id=random \
           ${OVSUSER} \
-          restart $OPTIONS
+          restart $OPTIONS $OVS_CTL_OPTS
 TimeoutSec=300

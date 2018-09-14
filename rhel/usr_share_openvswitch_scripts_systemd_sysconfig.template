@@ -23,5 +23,10 @@
 #
 OPTIONS=""
 
+# OVS_CTL_OPTS: Extra options to pass along with OPTIONS to ovs-ctl.
+# This flag is retained for backward compatibility. For example,
+# user can specify --ovs-vswitchd-wrapper=valgrind.
+# OVS_CTL_OPTS=
+
 # Uncomment and set the OVS User/Group value
 #OVS_USER_ID="openvswitch:openvswitch"

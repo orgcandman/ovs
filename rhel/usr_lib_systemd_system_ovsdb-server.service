@@ -16,10 +16,10 @@ EnvironmentFile=-/run/openvswitch/useropts
 ExecStart=/usr/share/openvswitch/scripts/ovs-ctl \
           --no-ovs-vswitchd --no-monitor --system-id=random \
           ${OVSUSER} \
-          start $OPTIONS
+          start $OPTIONS $OVS_CTL_OPTS
 ExecStop=/usr/share/openvswitch/scripts/ovs-ctl --no-ovs-vswitchd stop
 ExecReload=/usr/share/openvswitch/scripts/ovs-ctl --no-ovs-vswitchd \
            ${OVSUSER} \
-           --no-monitor restart $OPTIONS
+           --no-monitor restart $OPTIONS $OVS_CTL_OPTS
 RuntimeDirectory=openvswitch
 RuntimeDirectoryMode=0755
