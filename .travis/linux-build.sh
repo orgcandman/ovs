@@ -125,6 +125,12 @@ if [ "$TESTSUITE" ]; then
         cat */_build/tests/testsuite.log
         exit 1
     fi
+
+    if [ "$DPDK" ] || [ "$DPDK_SHARED" ]; then
+        if ! sudo make check-dpdk; then
+            cat */tests/system-dpdk-testsuite.log
+        fi
+    fi
 else
     configure_ovs $OPTS
     make selinux-policy
