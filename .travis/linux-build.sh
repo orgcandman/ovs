@@ -125,6 +125,14 @@ if [ "$TESTSUITE" ]; then
         cat */_build/tests/testsuite.log
         exit 1
     fi
+
+    if [ "$DPDK" ] || [ "$DPDK_SHARED" ]; then
+        sudo mount -t hugetlbfs none /dev/hugepages
+        sudo su -c "echo 1024 > /proc/sys/vm/nr_hugepages"
+        sudo make -j4 check-dpdk || \
+            { cat tests/system-dpdk-testsuite.log; exit 1; }
+    fi
+
 else
     configure_ovs $OPTS
     make selinux-policy
