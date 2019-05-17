@@ -184,6 +184,7 @@ extern struct ct_l4_proto ct_proto_tcp;
 extern struct ct_l4_proto ct_proto_other;
 extern struct ct_l4_proto ct_proto_icmp4;
 extern struct ct_l4_proto ct_proto_icmp6;
+extern struct ct_l4_proto ct_proto_sctp;
 
 struct ct_l4_proto {
     struct conn *(*new_conn)(struct conntrack *ct, struct dp_packet *pkt,

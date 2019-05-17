@@ -139,6 +139,7 @@ static void
 expectation_clean(struct conntrack *ct, const struct conn_key *master_key);
 
 static struct ct_l4_proto *l4_protos[] = {
+    [IPPROTO_SCTP] = &ct_proto_sctp,
     [IPPROTO_TCP] = &ct_proto_tcp,
     [IPPROTO_UDP] = &ct_proto_other,
     [IPPROTO_ICMP] = &ct_proto_icmp4,
