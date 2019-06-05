@@ -79,8 +79,49 @@ other_new_conn(struct conntrack *ct, struct dp_packet *pkt OVS_UNUSED,
     return &conn->up;
 }
 
+static void
+other_conn_port_addr_translate(enum pat_action nat_action,
+                               struct dp_packet *pkt, const struct conn *conn)
+{
+    /* 'other' is only used for UDP for now, so the check is currently
+     * redundant.  Still, add it here for future proofing. */
+    if (conn->key.nw_proto != IPPROTO_UDP) {
+        return;
+    }
+
+    struct udp_header *uh = dp_packet_l4(pkt);
+
+    switch (nat_action) {
+    case PAT_ACTION_SRC_TRANSLATE:
+        packet_set_udp_port(pkt, conn->rev_key.dst.port, uh->udp_dst);
+        break;
+    case PAT_ACTION_DST_TRANSLATE:
+        packet_set_udp_port(pkt, uh->udp_src, conn->rev_key.src.port);
+        break;
+    case PAT_ACTION_SRC_UNTRANSLATE:
+        packet_set_udp_port(pkt, uh->udp_src, conn->key.src.port);
+        break;
+    case PAT_ACTION_DST_UNTRANSLATE:
+        packet_set_udp_port(pkt, conn->key.dst.port, uh->udp_dst);
+        break;
+    case PAT_ACTION_SRC_REVERSE:
+        packet_set_udp_port(pkt, conn->key.src.port, uh->udp_dst);
+        break;
+    case PAT_ACTION_DST_REVERSE:
+        packet_set_udp_port(pkt, uh->udp_src, conn->key.dst.port);
+        break;
+
+    case PAT_ACTION_REVERSE:
+    case PAT_ACTION_TRANSLATE:
+    case PAT_ACTION_UNTRANSLATE:
+    default:
+        OVS_NOT_REACHED();
+    }
+}
+
 struct ct_l4_proto ct_proto_other = {
     .new_conn = other_new_conn,
     .valid_new = other_valid_new,
     .conn_update = other_conn_update,
+    .port_addr_trans = other_conn_port_addr_translate,
 };

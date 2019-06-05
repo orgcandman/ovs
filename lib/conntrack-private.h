@@ -194,6 +194,8 @@ struct ct_l4_proto {
                                       long long now);
     void (*conn_get_protoinfo)(const struct conn *,
                                struct ct_dpif_protoinfo *);
+    void (*port_addr_trans)(enum pat_action, struct dp_packet *,
+                            const struct conn *);
 };
 
 extern long long ct_timeout_val[];

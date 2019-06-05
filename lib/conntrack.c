@@ -569,25 +569,23 @@ handle_alg_ctl(struct conntrack *ct, const struct conn_lookup_ctx *ctx,
 }
 
 static void
-pat_packet(struct dp_packet *pkt, const struct conn *conn)
+pat_packet(struct dp_packet *pkt, const struct conn *conn,
+           enum pat_action translation)
 {
-    if (conn->nat_info->nat_action & NAT_ACTION_SRC) {
-        if (conn->key.nw_proto == IPPROTO_TCP) {
-            struct tcp_header *th = dp_packet_l4(pkt);
-            packet_set_tcp_port(pkt, conn->rev_key.dst.port, th->tcp_dst);
-        } else if (conn->key.nw_proto == IPPROTO_UDP) {
-            struct udp_header *uh = dp_packet_l4(pkt);
-            packet_set_udp_port(pkt, conn->rev_key.dst.port, uh->udp_dst);
-        }
-    } else if (conn->nat_info->nat_action & NAT_ACTION_DST) {
-        if (conn->key.nw_proto == IPPROTO_TCP) {
-            struct tcp_header *th = dp_packet_l4(pkt);
-            packet_set_tcp_port(pkt, th->tcp_src, conn->rev_key.src.port);
-        } else if (conn->key.nw_proto == IPPROTO_UDP) {
-            struct udp_header *uh = dp_packet_l4(pkt);
-            packet_set_udp_port(pkt, uh->udp_src, conn->rev_key.src.port);
-        }
+    if (conn->key.nw_proto > ARRAY_SIZE(l4_protos) ||
+        !l4_protos[conn->key.nw_proto] ||
+        !l4_protos[conn->key.nw_proto]->port_addr_trans) {
+        return;
     }
+
+    enum pat_action action_enum = translation;
+    if (conn->nat_info->nat_action & NAT_ACTION_SRC) {
+        action_enum |= PAT_ACTION_SRC_VALUE;
+    } else if (conn->nat_info->nat_action & NAT_ACTION_DST) {
+        action_enum |= PAT_ACTION_DST_VALUE;
+    }
+
+    l4_protos[conn->key.nw_proto]->port_addr_trans(action_enum, pkt, conn);
 }
 
 static void
@@ -606,7 +604,7 @@ nat_packet(struct dp_packet *pkt, const struct conn *conn, bool related)
                                  &conn->rev_key.dst.addr.ipv6, true);
         }
         if (!related) {
-            pat_packet(pkt, conn);
+            pat_packet(pkt, conn, PAT_ACTION_TRANSLATE);
         }
     } else if (conn->nat_info->nat_action & NAT_ACTION_DST) {
         pkt->md.ct_state |= CS_DST_NAT;
@@ -621,55 +619,7 @@ nat_packet(struct dp_packet *pkt, const struct conn *conn, bool related)
                                  &conn->rev_key.src.addr.ipv6, true);
         }
         if (!related) {
-            pat_packet(pkt, conn);
-        }
-    }
-}
-
-static void
-un_pat_packet(struct dp_packet *pkt, const struct conn *conn)
-{
-    if (conn->nat_info->nat_action & NAT_ACTION_SRC) {
-        if (conn->key.nw_proto == IPPROTO_TCP) {
-            struct tcp_header *th = dp_packet_l4(pkt);
-            packet_set_tcp_port(pkt, th->tcp_src, conn->key.src.port);
-        } else if (conn->key.nw_proto == IPPROTO_UDP) {
-            struct udp_header *uh = dp_packet_l4(pkt);
-            packet_set_udp_port(pkt, uh->udp_src, conn->key.src.port);
-        }
-    } else if (conn->nat_info->nat_action & NAT_ACTION_DST) {
-        if (conn->key.nw_proto == IPPROTO_TCP) {
-            struct tcp_header *th = dp_packet_l4(pkt);
-            packet_set_tcp_port(pkt, conn->key.dst.port, th->tcp_dst);
-        } else if (conn->key.nw_proto == IPPROTO_UDP) {
-            struct udp_header *uh = dp_packet_l4(pkt);
-            packet_set_udp_port(pkt, conn->key.dst.port, uh->udp_dst);
-        }
-    }
-}
-
-static void
-reverse_pat_packet(struct dp_packet *pkt, const struct conn *conn)
-{
-    if (conn->nat_info->nat_action & NAT_ACTION_SRC) {
-        if (conn->key.nw_proto == IPPROTO_TCP) {
-            struct tcp_header *th_in = dp_packet_l4(pkt);
-            packet_set_tcp_port(pkt, conn->key.src.port,
-                                th_in->tcp_dst);
-        } else if (conn->key.nw_proto == IPPROTO_UDP) {
-            struct udp_header *uh_in = dp_packet_l4(pkt);
-            packet_set_udp_port(pkt, conn->key.src.port,
-                                uh_in->udp_dst);
-        }
-    } else if (conn->nat_info->nat_action & NAT_ACTION_DST) {
-        if (conn->key.nw_proto == IPPROTO_TCP) {
-            struct tcp_header *th_in = dp_packet_l4(pkt);
-            packet_set_tcp_port(pkt, th_in->tcp_src,
-                                conn->key.dst.port);
-        } else if (conn->key.nw_proto == IPPROTO_UDP) {
-            struct udp_header *uh_in = dp_packet_l4(pkt);
-            packet_set_udp_port(pkt, uh_in->udp_src,
-                                conn->key.dst.port);
+            pat_packet(pkt, conn, PAT_ACTION_TRANSLATE);
         }
     }
 }
@@ -701,7 +651,7 @@ reverse_nat_packet(struct dp_packet *pkt, const struct conn *conn)
                                  conn->key.dst.addr.ipv4);
         }
 
-        reverse_pat_packet(pkt, conn);
+        pat_packet(pkt, conn, PAT_ACTION_REVERSE);
         icmp->icmp_csum = 0;
         icmp->icmp_csum = csum(icmp, tail - (char *) icmp - pad);
     } else {
@@ -724,7 +674,7 @@ reverse_nat_packet(struct dp_packet *pkt, const struct conn *conn)
                                  inner_l3_6->ip6_dst.be32,
                                  &conn->key.dst.addr.ipv6, true);
         }
-        reverse_pat_packet(pkt, conn);
+        pat_packet(pkt, conn, PAT_ACTION_REVERSE);
         icmp6->icmp6_base.icmp6_cksum = 0;
         icmp6->icmp6_base.icmp6_cksum = packet_csum_upperlayer6(nh6, icmp6,
             IPPROTO_ICMPV6, tail - (char *) icmp6 - pad);
@@ -753,7 +703,7 @@ un_nat_packet(struct dp_packet *pkt, const struct conn *conn,
         if (OVS_UNLIKELY(related)) {
             reverse_nat_packet(pkt, conn);
         } else {
-            un_pat_packet(pkt, conn);
+            pat_packet(pkt, conn, PAT_ACTION_UNTRANSLATE);
         }
     } else if (conn->nat_info->nat_action & NAT_ACTION_DST) {
         pkt->md.ct_state |= CS_SRC_NAT;
@@ -771,7 +721,7 @@ un_nat_packet(struct dp_packet *pkt, const struct conn *conn,
         if (OVS_UNLIKELY(related)) {
             reverse_nat_packet(pkt, conn);
         } else {
-            un_pat_packet(pkt, conn);
+            pat_packet(pkt, conn, PAT_ACTION_UNTRANSLATE);
         }
     }
 }

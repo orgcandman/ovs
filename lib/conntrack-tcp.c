@@ -486,9 +486,43 @@ tcp_conn_get_protoinfo(const struct conn *conn_,
     protoinfo->tcp.flags_reply = tcp_peer_to_protoinfo_flags(&conn->peer[1]);
 }
 
+static void
+tcp_conn_port_addr_translate(enum pat_action nat_action, struct dp_packet *pkt,
+                             const struct conn *conn)
+{
+    struct tcp_header *th = dp_packet_l4(pkt);
+    switch (nat_action) {
+    case PAT_ACTION_SRC_TRANSLATE:
+        packet_set_tcp_port(pkt, conn->rev_key.dst.port, th->tcp_dst);
+        break;
+    case PAT_ACTION_DST_TRANSLATE:
+        packet_set_tcp_port(pkt, th->tcp_src, conn->rev_key.src.port);
+        break;
+    case PAT_ACTION_SRC_UNTRANSLATE:
+        packet_set_tcp_port(pkt, th->tcp_src, conn->key.src.port);
+        break;
+    case PAT_ACTION_DST_UNTRANSLATE:
+        packet_set_tcp_port(pkt, conn->key.dst.port, th->tcp_dst);
+        break;
+    case PAT_ACTION_SRC_REVERSE:
+        packet_set_tcp_port(pkt, conn->key.src.port, th->tcp_dst);
+        break;
+    case PAT_ACTION_DST_REVERSE:
+        packet_set_tcp_port(pkt, th->tcp_src, conn->key.dst.port);
+        break;
+
+    case PAT_ACTION_REVERSE:
+    case PAT_ACTION_TRANSLATE:
+    case PAT_ACTION_UNTRANSLATE:
+    default:
+        OVS_NOT_REACHED();
+    }
+}
+
 struct ct_l4_proto ct_proto_tcp = {
     .new_conn = tcp_new_conn,
     .valid_new = tcp_valid_new,
     .conn_update = tcp_conn_update,
     .conn_get_protoinfo = tcp_conn_get_protoinfo,
+    .port_addr_trans = tcp_conn_port_addr_translate
 };
