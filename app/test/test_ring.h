@@ -2,6 +2,9 @@
  * Copyright(c) 2019 Arm Limited
  */
 
+#ifndef _TEST_RING__H
+#define _TEST_RING__H
+
 #include <rte_malloc.h>
 #include <rte_ring.h>
 #include <rte_ring_elem.h>
@@ -185,3 +188,5 @@ test_ring_calloc(unsigned int rsize, int esize)
 
 	return p;
 }
+
+#endif
