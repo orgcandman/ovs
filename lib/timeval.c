@@ -22,6 +22,7 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/epoll.h>
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <unistd.h>
@@ -38,6 +39,12 @@
 #include "unixctl.h"
 #include "util.h"
 #include "openvswitch/vlog.h"
+
+#ifdef __linux__
+#define LINUX 1
+#else
+#define LINUX 0
+#endif
 
 VLOG_DEFINE_THIS_MODULE(timeval);
 
@@ -323,7 +330,57 @@ time_poll(struct pollfd *pollfds, int n_pollfds, HANDLE *handles OVS_UNUSED,
         }
 
 #ifndef _WIN32
-        retval = poll(pollfds, n_pollfds, time_left);
+        if (LINUX) {
+            struct epoll_event *events =
+                xzalloc(n_pollfds * sizeof(struct epoll_event));
+            size_t i;
+            int efd = epoll_create1(0);
+
+            for (i = 0; i < n_pollfds; ++i) {
+                struct epoll_event evt = {};
+
+#ifndef EPOLLEXCLUSIVE
+#define EPOLLEXCLUSIVE (1u << 28)
+#endif
+                evt.events = EPOLLEXCLUSIVE;
+#define CHECK_EVENT(e, p)                       \
+                if (pollfds[i].events & p) {     \
+                    evt.events |= e;    \
+                }
+
+                CHECK_EVENT(EPOLLIN, POLLIN);
+                CHECK_EVENT(EPOLLOUT, POLLOUT);
+                CHECK_EVENT(EPOLLERR, POLLERR);
+                CHECK_EVENT(EPOLLHUP, POLLHUP);
+                CHECK_EVENT(EPOLLPRI, POLLPRI);
+#undef CHECK_EVENT
+                pollfds[i].revents = 0;
+
+                epoll_ctl(efd, EPOLL_CTL_ADD, pollfds[i].fd,
+                          &evt);
+            }
+
+            retval = epoll_wait(efd, events, n_pollfds, time_left);
+
+            for (i = 0; i < n_pollfds; ++i) {
+#define CHECK_EVENT(e, p)                       \
+                if (events[i].events & e) {     \
+                    pollfds[i].revents |= p;    \
+                }
+
+                CHECK_EVENT(EPOLLIN, POLLIN);
+                CHECK_EVENT(EPOLLOUT, POLLOUT);
+                CHECK_EVENT(EPOLLERR, POLLERR);
+                CHECK_EVENT(EPOLLHUP, POLLHUP);
+                CHECK_EVENT(EPOLLPRI, POLLPRI);
+#undef CHECK_EVENT
+                epoll_ctl(efd, EPOLL_CTL_DEL, pollfds[i].fd, NULL);
+            }
+            free(events);
+            close(efd);
+        } else {
+            retval = poll(pollfds, n_pollfds, time_left);
+        }
         if (retval < 0) {
             retval = -errno;
         }
