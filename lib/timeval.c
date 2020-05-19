@@ -277,6 +277,37 @@ time_alarm(unsigned int secs)
     deadline = now < LLONG_MAX - msecs ? now + msecs : LLONG_MAX;
 }
 
+#ifndef POLL_BUSY_LOOP
+#define POLL_BUSY_LOOP 0x8000
+#endif
+
+static void
+log_events(int fd, short int events)
+{
+    struct ds s;
+
+    ds_init(&s);
+    ds_put_cstr(&s, "EVENT LOG: ");
+    ds_put_format(&s, "%d", fd);
+
+#define CHECK_EVENT(evt) \
+    if (events & evt) ds_put_format(&s, "[%s]", #evt );
+
+    CHECK_EVENT(POLLIN);
+    CHECK_EVENT(POLLOUT);
+    CHECK_EVENT(POLLERR);
+    CHECK_EVENT(POLLHUP);
+    CHECK_EVENT(POLLPRI);
+    CHECK_EVENT(POLL_BUSY_LOOP);
+
+#undef CHECK_EVENT
+
+    ds_put_cstr(&s, "\n");
+    if(0)VLOG_ERR("%s", ds_cstr(&s));
+    ds_destroy(&s);
+
+}
+
 /* Like poll(), except:
  *
  *      - The timeout is specified as an absolute time, as defined by
@@ -334,7 +365,13 @@ time_poll(struct pollfd *pollfds, int n_pollfds, HANDLE *handles OVS_UNUSED,
             struct epoll_event *events =
                 xzalloc(n_pollfds * sizeof(struct epoll_event));
             size_t i;
-            int efd = epoll_create1(0);
+            int efd;
+
+retry_epoll:
+            efd = epoll_create1(0);
+
+            if (efd < 0)
+                goto retry_epoll;
 
             for (i = 0; i < n_pollfds; ++i) {
                 struct epoll_event evt = {};
@@ -342,9 +379,10 @@ time_poll(struct pollfd *pollfds, int n_pollfds, HANDLE *handles OVS_UNUSED,
 #ifndef EPOLLEXCLUSIVE
 #define EPOLLEXCLUSIVE (1u << 28)
 #endif
-                evt.events = EPOLLEXCLUSIVE;
+                evt.data.fd = pollfds[i].fd;
 #define CHECK_EVENT(e, p)                       \
                 if (pollfds[i].events & p) {     \
+                    log_events(pollfds[i].fd, pollfds[i].events); \
                     evt.events |= e;    \
                 }
 
@@ -353,6 +391,7 @@ time_poll(struct pollfd *pollfds, int n_pollfds, HANDLE *handles OVS_UNUSED,
                 CHECK_EVENT(EPOLLERR, POLLERR);
                 CHECK_EVENT(EPOLLHUP, POLLHUP);
                 CHECK_EVENT(EPOLLPRI, POLLPRI);
+                CHECK_EVENT(EPOLLEXCLUSIVE, POLL_BUSY_LOOP);
 #undef CHECK_EVENT
                 pollfds[i].revents = 0;
 
@@ -362,10 +401,24 @@ time_poll(struct pollfd *pollfds, int n_pollfds, HANDLE *handles OVS_UNUSED,
 
             retval = epoll_wait(efd, events, n_pollfds, time_left);
 
-            for (i = 0; i < n_pollfds; ++i) {
+            /* if retval <= 0, this loop will be skipped */
+            for (i = 0; retval > 0 && i < retval; ++i) {
+                size_t j;
+                if(0) VLOG_ERR("EVNTS - LVL: %08X\n", events[i].events);
+
+                for (j = 0; j < n_pollfds &&
+                         events[i].data.fd != pollfds[j].fd; j++);
+
+                if (j == n_pollfds) /* skip for now */ {
+                    if(0) VLOG_ERR("WTF?!?!?\n");
+                    continue;
+                }
+
+                if(0)VLOG_ERR("Found FD and processing\n");
 #define CHECK_EVENT(e, p)                       \
                 if (events[i].events & e) {     \
-                    pollfds[i].revents |= p;    \
+                    if(0)VLOG_ERR("Setting bit\n");  \
+                    pollfds[j].revents |= p;    \
                 }
 
                 CHECK_EVENT(EPOLLIN, POLLIN);

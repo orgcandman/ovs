@@ -38,6 +38,12 @@ VLOG_DEFINE_THIS_MODULE(poll_loop);
 COVERAGE_DEFINE(poll_create_node);
 COVERAGE_DEFINE(poll_zero_timeout);
 
+#ifdef __linux__
+#define LINUX 1
+#else
+#define LINUX 0
+#endif
+
 struct poll_node {
     struct hmap_node hmap_node;
     struct pollfd pollfd;       /* Events to pass to time_poll(). */
@@ -53,6 +59,8 @@ struct poll_loop {
      * wake up immediately, or LLONG_MAX to wait forever. */
     long long int timeout_when; /* In msecs as returned by time_msec(). */
     const char *timeout_where;  /* Where 'timeout_when' was set. */
+
+    int epoll_fd;   /* epoll fd */
 };
 
 static struct poll_loop *poll_loop(void);
@@ -146,7 +154,12 @@ poll_create_node(int fd, HANDLE wevent, short int events, const char *where)
 void
 poll_fd_wait_at(int fd, short int events, const char *where)
 {
+    struct poll_loop *loop = poll_loop();
+
     poll_create_node(fd, 0, events, where);
+
+    if (loop->epoll_fd == -1)
+        return;
 }
 
 #ifdef _WIN32
@@ -246,7 +259,7 @@ static void
 log_wakeup(const char *where, const struct pollfd *pollfd, int timeout)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 10);
-    enum vlog_level level;
+    enum vlog_level level = VLL_ERR;
     int cpu_usage;
     struct ds s;
 
@@ -260,7 +273,7 @@ log_wakeup(const char *where, const struct pollfd *pollfd, int timeout)
     } else {
         return;
     }
-
+    
     ds_init(&s);
     ds_put_cstr(&s, "wakeup due to ");
     if (pollfd) {
@@ -361,8 +374,19 @@ poll_block(void)
         i++;
     }
 
-    retval = time_poll(pollfds, hmap_count(&loop->poll_nodes), wevents,
-                       loop->timeout_when, &elapsed);
+    if (loop->epoll_fd == -1)
+        retval = time_poll(pollfds, hmap_count(&loop->poll_nodes), wevents,
+                           loop->timeout_when, &elapsed);
+    /*    else {
+
+        size_t n_pollfds = hmap_count(&loop->poll_nodes);
+        struct epoll_event *events =
+            xzalloc(n_pollfds * sizeof(struct epoll_event));
+
+        retval = epoll_wait(loop->epoll_fd, events, n_pollfds, time_left);
+        }*/
+
+    if(0)VLOG_ERR("TIME_POLL: retval: %d", retval);
     if (retval < 0) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
         VLOG_ERR_RL(&rl, "poll: %s", ovs_strerror(-retval));
@@ -416,6 +440,7 @@ poll_loop(void)
     if (!loop) {
         loop = xzalloc(sizeof *loop);
         loop->timeout_when = LLONG_MAX;
+        loop->epoll_fd = -1;
         hmap_init(&loop->poll_nodes);
         xpthread_setspecific(key, loop);
     }

@@ -51,6 +51,10 @@ COVERAGE_DEFINE(netlink_sent);
 #define SOL_NETLINK 270
 #endif
 
+#ifndef POLL_BUSY_LOOP
+#define POLL_BUSY_LOOP 0x8000
+#endif
+
 /* A single (bad) Netlink message can in theory dump out many, many log
  * messages, so the burst size is set quite high here to avoid missing useful
  * information.  Also, at high logging levels we log *all* Netlink messages. */
@@ -1398,7 +1402,7 @@ nl_sock_wait(const struct nl_sock *sock, short int events)
         poll_wevent_wait(sock->overlapped.hEvent);
     }
 #else
-    poll_fd_wait(sock->fd, events);
+    poll_fd_wait(sock->fd, events | POLL_BUSY_LOOP);
 #endif
 }
 
