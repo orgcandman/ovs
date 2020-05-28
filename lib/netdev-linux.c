@@ -794,6 +794,10 @@ netdev_linux_run(const struct netdev_class *netdev_class OVS_UNUSED)
     } while (!error);
 }
 
+#ifndef POLL_BUSY_LOOP
+#define POLL_BUSY_LOOP 0x8000
+#endif
+
 static void
 netdev_linux_wait(const struct netdev_class *netdev_class OVS_UNUSED)
 {
@@ -804,7 +808,7 @@ netdev_linux_wait(const struct netdev_class *netdev_class OVS_UNUSED)
     }
     sock = netdev_linux_notify_sock();
     if (sock) {
-        nl_sock_wait(sock, POLLIN);
+        nl_sock_wait(sock, POLLIN | POLL_BUSY_LOOP);
     }
 }
 

@@ -172,6 +172,7 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
     sock->read_ioctl = OVS_IOCTL_READ;
 #else
     sock->fd = socket(AF_NETLINK, SOCK_RAW, protocol);
+    VLOG_WARN("Opened Netlink FD: %d\n", sock->fd);
     if (sock->fd < 0) {
         VLOG_ERR("fcntl: %s", ovs_strerror(errno));
         goto error;

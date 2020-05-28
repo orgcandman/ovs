@@ -64,6 +64,12 @@
 #include "unaligned.h"
 #include "util.h"
 
+#ifndef POLL_BUSY_LOOP
+#define POLL_BUSY_LOOP 0x8000
+#endif
+
+
+
 VLOG_DEFINE_THIS_MODULE(dpif_netlink);
 #ifdef _WIN32
 #include "wmi.h"
@@ -1294,7 +1300,7 @@ dpif_netlink_port_poll_wait(const struct dpif *dpif_)
     const struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
 
     if (dpif->port_notifier) {
-        nl_sock_wait(dpif->port_notifier, POLLIN);
+        nl_sock_wait(dpif->port_notifier, POLLIN | POLL_BUSY_LOOP);
     } else {
         poll_immediate_wake();
     }
@@ -2772,7 +2778,7 @@ dpif_netlink_recv_wait__(struct dpif_netlink *dpif, uint32_t handler_id)
     if (dpif->handlers && handler_id < dpif->n_handlers) {
         struct dpif_handler *handler = &dpif->handlers[handler_id];
 
-        poll_fd_wait(handler->epoll_fd, POLLIN);
+        poll_fd_wait(handler->epoll_fd, POLLIN /*| POLL_BUSY_LOOP*/);
     }
 #endif
 }

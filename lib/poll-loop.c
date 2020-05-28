@@ -392,7 +392,7 @@ poll_block(void)
         VLOG_ERR_RL(&rl, "poll: %s", ovs_strerror(-retval));
     } else if (!retval) {
         log_wakeup(loop->timeout_where, NULL, elapsed);
-    } else if (get_cpu_usage() > 50 || VLOG_IS_DBG_ENABLED()) {
+    } else /* if (get_cpu_usage() > 50 || VLOG_IS_DBG_ENABLED()) */ {
         i = 0;
         HMAP_FOR_EACH (node, hmap_node, &loop->poll_nodes) {
             if (pollfds[i].revents) {

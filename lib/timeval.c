@@ -320,6 +320,9 @@ log_events(int fd, short int events)
  *        never return -EINTR.)
  *
  * Stores the number of milliseconds elapsed during poll in '*elapsed'. */
+static int efd = -1;
+static struct ovs_mutex efd_mutex = OVS_MUTEX_INITIALIZER;
+
 int
 time_poll(struct pollfd *pollfds, int n_pollfds, HANDLE *handles OVS_UNUSED,
           long long int timeout_when, int *elapsed)
@@ -365,13 +368,14 @@ time_poll(struct pollfd *pollfds, int n_pollfds, HANDLE *handles OVS_UNUSED,
             struct epoll_event *events =
                 xzalloc(n_pollfds * sizeof(struct epoll_event));
             size_t i;
-            int efd;
 
-retry_epoll:
-            efd = epoll_create1(0);
-
-            if (efd < 0)
-                goto retry_epoll;
+            if (efd < 0) {
+                ovs_mutex_lock(&efd_mutex);
+                while (efd < 0) {
+                    efd = epoll_create1(0);
+                }
+                ovs_mutex_unlock(&efd_mutex);
+            }
 
             for (i = 0; i < n_pollfds; ++i) {
                 struct epoll_event evt = {};
@@ -383,6 +387,7 @@ retry_epoll:
 #define CHECK_EVENT(e, p)                       \
                 if (pollfds[i].events & p) {     \
                     log_events(pollfds[i].fd, pollfds[i].events); \
+                    VLOG_WARN("pollfd: %d with [%s]", pollfds[i].fd, #e ); \
                     evt.events |= e;    \
                 }
 
@@ -426,11 +431,18 @@ retry_epoll:
                 CHECK_EVENT(EPOLLERR, POLLERR);
                 CHECK_EVENT(EPOLLHUP, POLLHUP);
                 CHECK_EVENT(EPOLLPRI, POLLPRI);
+
+                if (pollfds[j].events & POLL_BUSY_LOOP)
+                    pollfds[j].revents |= POLL_BUSY_LOOP;
+
 #undef CHECK_EVENT
+            }
+
+            for (i = 0; i < n_pollfds; ++i) {
                 epoll_ctl(efd, EPOLL_CTL_DEL, pollfds[i].fd, NULL);
             }
+
             free(events);
-            close(efd);
         } else {
             retval = poll(pollfds, n_pollfds, time_left);
         }

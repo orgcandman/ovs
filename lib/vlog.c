@@ -1059,6 +1059,8 @@ format_log_message(const struct vlog_module *module, enum vlog_level level,
             subprogram_name = get_subprogram_name();
             if (subprogram_name[0]) {
                 ds_put_format(s, "(%s)", subprogram_name);
+            } else {
+                ds_put_cstr(s, "(main)");
             }
             break;
         default:
