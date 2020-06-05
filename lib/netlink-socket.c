@@ -1398,7 +1398,7 @@ nl_sock_wait(const struct nl_sock *sock, short int events)
         poll_wevent_wait(sock->overlapped.hEvent);
     }
 #else
-    poll_fd_wait(sock->fd, events);
+    poll_fd_wait_excl(sock->fd, events);
 #endif
 }
 
