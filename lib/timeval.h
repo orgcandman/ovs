@@ -60,6 +60,7 @@ void time_timespec(struct timespec *);
 void time_wall_timespec(struct timespec *);
 void time_alarm(unsigned int secs);
 int time_poll(struct pollfd *, int n_pollfds, HANDLE *handles,
+              struct pollfd *, int n_excl,
               long long int timeout_when, int *elapsed);
 
 long long int timespec_to_msec(const struct timespec *);

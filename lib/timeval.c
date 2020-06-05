@@ -284,12 +284,16 @@ time_alarm(unsigned int secs)
  * Stores the number of milliseconds elapsed during poll in '*elapsed'. */
 int
 time_poll(struct pollfd *pollfds, int n_pollfds, HANDLE *handles OVS_UNUSED,
+          struct pollfd *excls, int n_excl,
           long long int timeout_when, int *elapsed)
 {
     long long int *last_wakeup = last_wakeup_get();
+    struct pollfd *pollfds_proper = NULL;
+    int n_fds = n_pollfds + n_excl;
     long long int start;
     bool quiescent;
     int retval = 0;
+    size_t i;
 
     time_init();
     coverage_clear();
@@ -301,6 +305,15 @@ time_poll(struct pollfd *pollfds, int n_pollfds, HANDLE *handles OVS_UNUSED,
 
     timeout_when = MIN(timeout_when, deadline);
     quiescent = ovsrcu_is_quiescent();
+
+    pollfds_proper = xcalloc(sizeof *pollfds, n_pollfds + n_excl);
+    for (i = 0; i < n_pollfds; ++i) {
+        pollfds_proper[i] = pollfds[i];
+    }
+
+    for (; i < n_pollfds + n_excl; ++i) {
+        pollfds_proper[i] = excls[i - n_pollfds];
+    }
 
     for (;;) {
         long long int now = time_msec();
@@ -323,15 +336,15 @@ time_poll(struct pollfd *pollfds, int n_pollfds, HANDLE *handles OVS_UNUSED,
         }
 
 #ifndef _WIN32
-        retval = poll(pollfds, n_pollfds, time_left);
+        retval = poll(pollfds_proper, n_fds, time_left);
         if (retval < 0) {
             retval = -errno;
         }
 #else
-        if (n_pollfds > MAXIMUM_WAIT_OBJECTS) {
+        if (n_fds > MAXIMUM_WAIT_OBJECTS) {
             VLOG_ERR("Cannot handle more than maximum wait objects\n");
-        } else if (n_pollfds != 0) {
-            retval = WaitForMultipleObjects(n_pollfds, handles, FALSE,
+        } else if (n_fds != 0) {
+            retval = WaitForMultipleObjects(n_fds, handles, FALSE,
                                             time_left);
         }
         if (retval < 0) {
@@ -363,6 +376,18 @@ time_poll(struct pollfd *pollfds, int n_pollfds, HANDLE *handles OVS_UNUSED,
             break;
         }
     }
+
+    if (retval > 0) {
+        for (i = 0; i < n_pollfds; ++i) {
+            pollfds[i] = pollfds_proper[i];
+        }
+        for (; i < n_pollfds + n_excl; ++i) {
+            excls[i - n_pollfds] = pollfds_proper[i];
+        }
+    }
+
+    free(pollfds_proper);
+
     *last_wakeup = time_msec();
     refresh_rusage();
     *elapsed = *last_wakeup - start;

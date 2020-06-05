@@ -42,6 +42,7 @@ struct poll_node {
     struct hmap_node hmap_node;
     struct pollfd pollfd;       /* Events to pass to time_poll(). */
     HANDLE wevent;              /* Events for WaitForMultipleObjects(). */
+    bool exclusive;             /* Only wake a single thread, if possible. */
     const char *where;          /* Where poll_node was created. */
 };
 
@@ -100,7 +101,8 @@ find_poll_node(struct poll_loop *loop, int fd, HANDLE wevent)
  * automatically provide the caller's source file and line number for
  * 'where'.) */
 static void
-poll_create_node(int fd, HANDLE wevent, short int events, const char *where)
+poll_create_node(int fd, HANDLE wevent, short int events, bool exclusive,
+                 const char *where)
 {
     struct poll_loop *loop = poll_loop();
     struct poll_node *node;
@@ -128,6 +130,10 @@ poll_create_node(int fd, HANDLE wevent, short int events, const char *where)
         node->wevent = wevent;
         node->where = where;
     }
+
+    /* If the exclusive flag is set anywhere, it should be honored
+     * everywhere for this descriptor. */
+    node->exclusive = exclusive;
 }
 
 /* Registers 'fd' as waiting for the specified 'events' (which should be POLLIN
@@ -146,7 +152,32 @@ poll_create_node(int fd, HANDLE wevent, short int events, const char *where)
 void
 poll_fd_wait_at(int fd, short int events, const char *where)
 {
-    poll_create_node(fd, 0, events, where);
+    poll_create_node(fd, 0, events, false, where);
+}
+
+
+/* Registers 'fd' as waiting for the specified 'events' (which should be POLLIN
+ * or POLLOUT or POLLIN | POLLOUT).  The following call to poll_block() will
+ * wake up when 'fd' becomes ready for one or more of the requested events.
+ *
+ * If the underlying operating system supports a form of exclusive blocking,
+ * then only a single thread registered for the fd will be woken.  If the
+ * underlying system doesn't support exclusive thread waking, it will behave
+ * as though poll_fd_wait_at was called instead.
+ *
+ * On Windows, 'fd' must be a socket.
+ *
+ * The event registration is one-shot: only the following call to poll_block()
+ * is affected.  The event will need to be re-registered after poll_block() is
+ * called if it is to persist.
+ *
+ * ('where' is used in debug logging.  Commonly one would use poll_fd_wait() to
+ * automatically provide the caller's source file and line number for
+ * 'where'.) */
+void
+poll_fd_wait_excl_at(int fd, short int events, const char *where)
+{
+    poll_create_node(fd, 0, events, true, where);
 }
 
 #ifdef _WIN32
@@ -321,10 +352,11 @@ poll_block(void)
     struct poll_loop *loop = poll_loop();
     struct poll_node *node;
     struct pollfd *pollfds;
+    struct pollfd *pollfds_excl;
     HANDLE *wevents = NULL;
     int elapsed;
     int retval;
-    int i;
+    int i, j;
 
     /* Register fatal signal events before actually doing any real work for
      * poll_block. */
@@ -335,7 +367,9 @@ poll_block(void)
     }
 
     timewarp_run();
-    pollfds = xmalloc(hmap_count(&loop->poll_nodes) * sizeof *pollfds);
+    pollfds = xcalloc(sizeof *pollfds, hmap_count(&loop->poll_nodes));
+    pollfds_excl = xcalloc(sizeof *pollfds_excl,
+                           hmap_count(&loop->poll_nodes));
 
 #ifdef _WIN32
     wevents = xmalloc(hmap_count(&loop->poll_nodes) * sizeof *wevents);
@@ -343,7 +377,13 @@ poll_block(void)
 
     /* Populate with all the fds and events. */
     i = 0;
+    j = 0;
     HMAP_FOR_EACH (node, hmap_node, &loop->poll_nodes) {
+        if (node->exclusive) {
+            pollfds_excl[j++] = node->pollfd;
+            continue;
+        }
+
         pollfds[i] = node->pollfd;
 #ifdef _WIN32
         wevents[i] = node->wevent;
@@ -361,7 +401,9 @@ poll_block(void)
         i++;
     }
 
-    retval = time_poll(pollfds, hmap_count(&loop->poll_nodes), wevents,
+    retval = time_poll(pollfds, hmap_count(&loop->poll_nodes),
+                       wevents,
+                       pollfds_excl, j,
                        loop->timeout_when, &elapsed);
     if (retval < 0) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -373,6 +415,9 @@ poll_block(void)
         HMAP_FOR_EACH (node, hmap_node, &loop->poll_nodes) {
             if (pollfds[i].revents) {
                 log_wakeup(node->where, &pollfds[i], 0);
+            }
+            if (pollfds_excl[i].revents) {
+                log_wakeup(node->where, &pollfds_excl[i], 0);
             }
             i++;
         }

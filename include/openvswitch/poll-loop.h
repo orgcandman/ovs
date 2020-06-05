@@ -29,6 +29,7 @@
  * =============
  *
  * The poll set is per-thread, so all functions in this module are thread-safe.
+ *
  */
 #ifndef POLL_LOOP_H
 #define POLL_LOOP_H 1
@@ -58,6 +59,16 @@ extern "C" {
 void poll_fd_wait_at(int fd, short int events, const char *where);
 #define poll_fd_wait(fd, events) poll_fd_wait_at(fd, events, OVS_SOURCE_LOCATOR)
 
+/* Schedule events to wake up the following poll_block(), but only for a
+ * single thread.
+ *
+ * Thread exclusivity isn't guaranteed by any poll() call, but some operating
+ * systems provide special primitives which allow this (for example, 'epoll'
+ * under Linux, and 'kqueue' for FreeBSD).  See also `poll_fd_wait_at`.
+ */
+void poll_fd_wait_excl_at(int fd, short int events, const char *where);
+#define poll_fd_wait_excl(fd, events) \
+    poll_fd_wait_excl_at(fd, events, OVS_SOURCE_LOCATOR)
 #ifdef _WIN32
 void poll_wevent_wait_at(HANDLE wevent, const char *where);
 #define poll_wevent_wait(wevent) poll_wevent_wait_at(wevent, OVS_SOURCE_LOCATOR)
