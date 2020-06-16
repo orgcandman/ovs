@@ -270,6 +270,62 @@ time_alarm(unsigned int secs)
     deadline = now < LLONG_MAX - msecs ? now + msecs : LLONG_MAX;
 }
 
+#if defined __linux__
+#include <sys/epoll.h>
+/* Solely for the epoll system call. */
+static int efd = -1;
+static struct ovs_mutex efd_mutex = OVS_MUTEX_INITIALIZER;
+
+#ifndef EPOLLEXCLUSIVE
+#define EPOLLEXCLUSIVE (1u << 28)
+#endif
+
+static void
+terminate_epoll_fd(void *aux)
+{
+    int epoll_fd = *(int *)aux;
+
+    close(epoll_fd);
+    *(int *)aux = -1;
+}
+
+static void
+clear_epoll_event(struct epoll_event *evt, int epoll_fd)
+{
+    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, evt->data.fd, NULL);
+}
+
+#define CHECK_EVENTS                            \
+    CHECK_EVENT(EPOLLIN, POLLIN);               \
+    CHECK_EVENT(EPOLLOUT, POLLOUT);             \
+    CHECK_EVENT(EPOLLERR, POLLERR);             \
+    CHECK_EVENT(EPOLLHUP, POLLHUP);             \
+    CHECK_EVENT(EPOLLPRI, POLLPRI);
+
+static void
+set_epoll_event(struct pollfd *pollfd, uint32_t starting_flags, int epoll_fd)
+{
+    struct epoll_event evt = {};
+
+    evt.data.fd = pollfd->fd;
+    evt.events = starting_flags;
+
+#define CHECK_EVENT(e, p)                                            \
+    if (pollfd->events & p) {                                        \
+        evt.events |= e;                                             \
+    }
+
+    CHECK_EVENTS
+#undef CHECK_EVENT
+
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, pollfd->fd, &evt) < 0) {
+        VLOG_DBG("Error adding to %d: %lu, %s", epoll_fd, pollfd->fd,
+                 ovs_strerror(errno));
+    }
+}
+
+#endif
+
 /* Like poll(), except:
  *
  *      - The timeout is specified as an absolute time, as defined by
@@ -288,7 +344,13 @@ time_poll(struct pollfd *pollfds, int n_pollfds, HANDLE *handles OVS_UNUSED,
           long long int timeout_when, int *elapsed)
 {
     long long int *last_wakeup = last_wakeup_get();
+
+#if defined __linux__
+    struct epoll_event *pollfds_proper = NULL;
+#else    
     struct pollfd *pollfds_proper = NULL;
+#endif
+
     int n_fds = n_pollfds + n_excl;
     long long int start;
     bool quiescent;
@@ -306,13 +368,50 @@ time_poll(struct pollfd *pollfds, int n_pollfds, HANDLE *handles OVS_UNUSED,
     timeout_when = MIN(timeout_when, deadline);
     quiescent = ovsrcu_is_quiescent();
 
+#if defined __linux__
+    if (efd < 0) {
+        ovs_mutex_lock(&efd_mutex);
+        /* XXX: This is a bit ugly, but we need to ensure we get an epoll fd
+         *      and also need to avoid races.
+         *      We could use the ovsthread_once_* infrastructure here.
+         *      However, if there's a future reason to destroy / respawn
+         *      the fd, then we'd need to open-code it anyway. */
+        while (efd < 0) {
+            efd = epoll_create1(0);
+            if (efd >= 0) {
+                vlog_set_levels(&this_module, VLF_SYSLOG,
+                                VLL_DBG);
+
+                vlog_set_levels(&this_module, VLF_FILE,
+                                VLL_DBG);
+                
+                fatal_signal_add_hook(terminate_epoll_fd, NULL, &efd, true);
+            }
+        }
+        ovs_assert(efd >= 0);
+        ovs_mutex_unlock(&efd_mutex);
+    }
+#endif
+
     pollfds_proper = xcalloc(sizeof *pollfds, n_pollfds + n_excl);
+
     for (i = 0; i < n_pollfds; ++i) {
+#if defined __linux__
+        pollfds[i].revents = 0;
+        set_epoll_event(&pollfds[i], 0, efd);
+#else
         pollfds_proper[i] = pollfds[i];
+#endif
     }
 
     for (; i < n_pollfds + n_excl; ++i) {
-        pollfds_proper[i] = excls[i - n_pollfds];
+        size_t iter = i - n_pollfds;
+#if defined __linux__
+        excls[iter].revents = 0;
+        set_epoll_event(&excls[iter], EPOLLEXCLUSIVE, efd);
+#else
+        pollfds_proper[i] = excls[iter];
+#endif
     }
 
     for (;;) {
@@ -336,10 +435,16 @@ time_poll(struct pollfd *pollfds, int n_pollfds, HANDLE *handles OVS_UNUSED,
         }
 
 #ifndef _WIN32
+#if defined __linux__
+        VLOG_DBG("poll start %d - %d:%d.", efd, n_fds, time_left);
+        retval = epoll_wait(efd, pollfds_proper, n_fds, time_left);
+#else
         retval = poll(pollfds_proper, n_fds, time_left);
+#endif
         if (retval < 0) {
             retval = -errno;
         }
+        VLOG_DBG("poll end.");
 #else
         if (n_fds > MAXIMUM_WAIT_OBJECTS) {
             VLOG_ERR("Cannot handle more than maximum wait objects\n");
@@ -373,17 +478,55 @@ time_poll(struct pollfd *pollfds, int n_pollfds, HANDLE *handles OVS_UNUSED,
         }
 
         if (retval != -EINTR) {
+            VLOG_DBG("Error %s...", ovs_strerror(retval));
             break;
         }
     }
 
     if (retval > 0) {
+#if defined __linux__
+        for (i = 0; i < retval; ++i) {
+            size_t j;
+
+            for (j = 0; j < n_pollfds &&
+                        pollfds_proper[i].data.fd != pollfds[j].fd; j++);
+
+            for (; j >= n_pollfds && j < n_pollfds + n_excl &&
+                   pollfds_proper[i].data.fd != excls[j - n_pollfds].fd;
+                 j++);
+
+            /* Weird case, but perhaps this FD was updated somewhere else
+             * and we should just ignore it.  */
+            if (j >= n_pollfds + n_excl) {
+                VLOG_DBG("What - %lu", j);
+                continue;
+            }
+
+#define CHECK_EVENT(e, p)                               \
+            if (pollfds_proper[i].events & e) {         \
+                if (j < n_pollfds) {                    \
+                    VLOG_DBG("normal fd %lu, %d", j, pollfds[j].fd);  \
+                    pollfds[j].revents |= p;            \
+                } else {                                \
+                    VLOG_DBG("excl fd %lu,%lu, %d", j, j - n_pollfds, excls[j - n_pollfds].fd); \
+                    excls[j - n_pollfds].revents |= p;  \
+                }                                       \
+            }
+
+            CHECK_EVENTS
+#undef CHECK_EVENT
+
+            clear_epoll_event(&pollfds_proper[i], efd);
+        }
+
+#else
         for (i = 0; i < n_pollfds; ++i) {
             pollfds[i] = pollfds_proper[i];
         }
         for (; i < n_pollfds + n_excl; ++i) {
             excls[i - n_pollfds] = pollfds_proper[i];
         }
+#endif
     }
 
     free(pollfds_proper);

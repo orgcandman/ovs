@@ -152,6 +152,7 @@ m4_define([_OVS_VSWITCHD_START],
    on_exit "kill `cat ovsdb-server.pid`"
    AT_CHECK([[sed < stderr '
 /vlog|INFO|opened log file/d
+/timeval.*|DBG|.*/d
 /ovsdb_server|INFO|ovsdb-server (Open vSwitch)/d']])
    AT_CAPTURE_FILE([ovsdb-server.log])
 
@@ -172,6 +173,7 @@ m4_define([_OVS_VSWITCHD_START],
 /netdev_linux|INFO|.*device has unknown hardware address family/d
 /ofproto|INFO|datapath ID changed to fedcba9876543210/d
 /dpdk|INFO|DPDK Disabled - Use other_config:dpdk-init to enable/d
+/timeval.*|DBG|.*/d
 /netlink_socket|INFO|netlink: could not enable listening to all nsid/d
 /probe tc:/d
 /tc: Using policy/d']])
@@ -236,6 +238,7 @@ check_logs () {
 /timeval.*faults: [[0-9]]* minor, [[0-9]]* major/d
 /timeval.*disk: [[0-9]]* reads, [[0-9]]* writes/d
 /timeval.*context switches: [[0-9]]* voluntary, [[0-9]]* involuntary/d
+/timeval.*|DBG|.*/d
 /ovs_rcu.*blocked [[0-9]]* ms waiting for .* to quiesce/d
 /Dropped [[0-9]]* log messages/d
 /|WARN|/p
