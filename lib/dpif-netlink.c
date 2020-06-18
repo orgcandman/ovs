@@ -179,9 +179,13 @@ struct dpif_windows_vport_sock {
 
 struct dpif_handler {
     struct epoll_event *epoll_events;
-    int epoll_fd;                 /* epoll fd that includes channel socks. */
-    int n_events;                 /* Num events returned by epoll_wait(). */
-    int event_offset;             /* Offset into 'epoll_events'. */
+    struct dpif_channel *channels; /* Array of channels for each port. */
+    size_t n_channels;             /* Count of channels for each port. */
+    int epoll_fd;                  /* epoll fd that includes channel socks. */
+    int n_events;                  /* Num events returned by epoll_wait(). */
+    int event_offset;              /* Offset into 'epoll_events'. */
+
+    //struct ovs_rwlock channel_lock; /* For managing channels. */
 
 #ifdef _WIN32
     /* Pool of sockets. */
@@ -201,7 +205,6 @@ struct dpif_netlink {
     struct fat_rwlock upcall_lock;
     struct dpif_handler *handlers;
     uint32_t n_handlers;           /* Num of upcall handlers. */
-    struct dpif_channel *channels; /* Array of channels for each port. */
     int uc_array_size;             /* Size of 'handler->channels' and */
                                    /* 'handler->epoll_events'. */
 
@@ -452,15 +455,22 @@ static bool
 vport_get_pid(struct dpif_netlink *dpif, uint32_t port_idx,
               uint32_t *upcall_pid)
 {
-    /* Since the nl_sock can only be assigned in either all
-     * or none "dpif" channels, the following check
-     * would suffice. */
-    if (!dpif->channels[port_idx].sock) {
-        return false;
-    }
+    size_t i;
     ovs_assert(!WINDOWS || dpif->n_handlers <= 1);
 
-    *upcall_pid = nl_sock_pid(dpif->channels[port_idx].sock);
+    /* The 'port_idx' should only be valid for a single handler. */
+    for (i = 0; i < dpif->n_handlers; ++i) {
+
+        if (port_idx < dpif->handlers[i].n_channels &&
+            dpif->handlers[i].channels[port_idx].sock) {
+            *upcall_pid =
+                nl_sock_pid(dpif->handlers[i].channels[port_idx].sock);
+            break;
+        }
+    }
+
+    if (i == dpif->n_handlers)
+        return false;
 
     return true;
 }
@@ -473,15 +483,23 @@ vport_add_channel(struct dpif_netlink *dpif, odp_port_t port_no,
     uint32_t port_idx = odp_to_u32(port_no);
     size_t i;
     int error;
+    struct dpif_handler *handler = NULL;
 
     if (dpif->handlers == NULL) {
         close_nl_sock(sock);
         return 0;
     }
 
+    /* choose a handler by finding the least populated handler. */
+    handler = &dpif->handlers[0];
+    for (i = 0; i < dpif->n_handlers; ++i) {
+        if (dpif->handlers[i].n_channels < handler->n_channels)
+            handler = &dpif->handlers[i];
+    }
+
     /* We assume that the datapath densely chooses port numbers, which can
      * therefore be used as an index into 'channels' and 'epoll_events' of
-     * 'dpif'. */
+     * 'dpif->handler'. */
     if (port_idx >= dpif->uc_array_size) {
         uint32_t new_size = port_idx + 1;
 
@@ -491,40 +509,33 @@ vport_add_channel(struct dpif_netlink *dpif, odp_port_t port_no,
             return EFBIG;
         }
 
-        dpif->channels = xrealloc(dpif->channels,
-                                  new_size * sizeof *dpif->channels);
+        handler->channels = xrealloc(handler->channels,
+                                     new_size * sizeof *handler->channels);
 
-        for (i = dpif->uc_array_size; i < new_size; i++) {
-            dpif->channels[i].sock = NULL;
+        for (i = handler->n_channels; i < new_size; i++) {
+            handler->channels[i].sock = NULL;
         }
 
-        for (i = 0; i < dpif->n_handlers; i++) {
-            struct dpif_handler *handler = &dpif->handlers[i];
-
-            handler->epoll_events = xrealloc(handler->epoll_events,
-                new_size * sizeof *handler->epoll_events);
-
-        }
+        handler->epoll_events = xrealloc(handler->epoll_events,
+                                         new_size * sizeof *handler->epoll_events);
         dpif->uc_array_size = new_size;
+        handler->n_channels = new_size;
     }
 
     memset(&event, 0, sizeof event);
     event.events = EPOLLIN | EPOLLEXCLUSIVE;
     event.data.u32 = port_idx;
 
-    for (i = 0; i < dpif->n_handlers; i++) {
-        struct dpif_handler *handler = &dpif->handlers[i];
-
 #ifndef _WIN32
-        if (epoll_ctl(handler->epoll_fd, EPOLL_CTL_ADD, nl_sock_fd(sock),
-                      &event) < 0) {
-            error = errno;
-            goto error;
-        }
-#endif
+    if (epoll_ctl(handler->epoll_fd, EPOLL_CTL_ADD, nl_sock_fd(sock),
+                  &event) < 0) {
+        error = errno;
+        goto error;
     }
-    dpif->channels[port_idx].sock = sock;
-    dpif->channels[port_idx].last_poll = LLONG_MIN;
+#endif
+
+    handler->channels[port_idx].sock = sock;
+    handler->channels[port_idx].last_poll = LLONG_MIN;
 
     return 0;
 
@@ -535,7 +546,7 @@ error:
                   nl_sock_fd(sock), NULL);
     }
 #endif
-    dpif->channels[port_idx].sock = NULL;
+    handler->channels[port_idx].sock = NULL;
 
     return error;
 }
@@ -544,25 +555,34 @@ static void
 vport_del_channels(struct dpif_netlink *dpif, odp_port_t port_no)
 {
     uint32_t port_idx = odp_to_u32(port_no);
+    struct dpif_handler *handler = NULL;
     size_t i;
 
-    if (!dpif->handlers || port_idx >= dpif->uc_array_size
-        || !dpif->channels[port_idx].sock) {
+    if (!dpif->handlers || port_idx >= dpif->uc_array_size) {
         return;
     }
 
     for (i = 0; i < dpif->n_handlers; i++) {
-        struct dpif_handler *handler = &dpif->handlers[i];
+        handler = &dpif->handlers[i];
+
+        if (port_idx >= handler->n_channels ||
+            !handler->channels[port_idx].sock) {
+            handler = NULL;
+            continue;
+        }
 #ifndef _WIN32
         epoll_ctl(handler->epoll_fd, EPOLL_CTL_DEL,
-                  nl_sock_fd(dpif->channels[port_idx].sock), NULL);
+                  nl_sock_fd(handler->channels[port_idx].sock), NULL);
 #endif
         handler->event_offset = handler->n_events = 0;
     }
+
+    if (handler && handler->channels[port_idx].sock) {
 #ifndef _WIN32
-    nl_sock_destroy(dpif->channels[port_idx].sock);
+        nl_sock_destroy(handler->channels[port_idx].sock);
 #endif
-    dpif->channels[port_idx].sock = NULL;
+        handler->channels[port_idx].sock = NULL;
+    }
 }
 
 static void
@@ -575,36 +595,36 @@ destroy_all_channels(struct dpif_netlink *dpif)
         return;
     }
 
-    for (i = 0; i < dpif->uc_array_size; i++ ) {
-        struct dpif_netlink_vport vport_request;
-        uint32_t upcall_pids = 0;
-
-        if (!dpif->channels[i].sock) {
-            continue;
-        }
-
-        /* Turn off upcalls. */
-        dpif_netlink_vport_init(&vport_request);
-        vport_request.cmd = OVS_VPORT_CMD_SET;
-        vport_request.dp_ifindex = dpif->dp_ifindex;
-        vport_request.port_no = u32_to_odp(i);
-        vport_request.n_upcall_pids = 1;
-        vport_request.upcall_pids = &upcall_pids;
-        dpif_netlink_vport_transact(&vport_request, NULL, NULL);
-
-        vport_del_channels(dpif, u32_to_odp(i));
-    }
-
     for (i = 0; i < dpif->n_handlers; i++) {
         struct dpif_handler *handler = &dpif->handlers[i];
+        size_t j;
 
+        for (j = 0; j < handler->n_channels; j++ ) {
+            struct dpif_netlink_vport vport_request;
+            uint32_t upcall_pids = 0;
+
+            if (!handler->channels[j].sock) {
+                continue;
+            }
+
+            /* Turn off upcalls. */
+            dpif_netlink_vport_init(&vport_request);
+            vport_request.cmd = OVS_VPORT_CMD_SET;
+            vport_request.dp_ifindex = dpif->dp_ifindex;
+            vport_request.port_no = u32_to_odp(j);
+            vport_request.n_upcall_pids = 1;
+            vport_request.upcall_pids = &upcall_pids;
+            dpif_netlink_vport_transact(&vport_request, NULL, NULL);
+
+            vport_del_channels(dpif, u32_to_odp(j));
+        }
+        handler->n_channels = 0;
+        free(handler->channels);
         dpif_netlink_handler_uninit(handler);
         free(handler->epoll_events);
     }
-    free(dpif->channels);
     free(dpif->handlers);
     dpif->handlers = NULL;
-    dpif->channels = NULL;
     dpif->n_handlers = 0;
     dpif->uc_array_size = 0;
 }
@@ -1091,13 +1111,17 @@ dpif_netlink_port_get_pid__(const struct dpif_netlink *dpif,
         /* The ODPP_NONE "reserved" port number uses the "ovs-system"'s
          * channel, since it is not heavily loaded. */
         uint32_t idx = port_idx >= dpif->uc_array_size ? 0 : port_idx;
+        size_t i;
 
         /* Needs to check in case the socket pointer is changed in between
          * the holding of upcall_lock.  A known case happens when the main
          * thread deletes the vport while the handler thread is handling
          * the upcall from that port. */
-        if (dpif->channels[idx].sock) {
-            pid = nl_sock_pid(dpif->channels[idx].sock);
+        for (i = 0; i < dpif->n_handlers; ++i) {
+            if (idx < dpif->handlers[i].n_channels &&
+                dpif->handlers[i].channels[idx].sock) {
+                pid = nl_sock_pid(dpif->handlers[i].channels[idx].sock);
+            }
         }
     }
 
@@ -2738,7 +2762,7 @@ dpif_netlink_recv__(struct dpif_netlink *dpif, uint32_t handler_id,
 
     while (handler->event_offset < handler->n_events) {
         int idx = handler->epoll_events[handler->event_offset].data.u32;
-        struct dpif_channel *ch = &dpif->channels[idx];
+        struct dpif_channel *ch = &handler->channels[idx];
 
         handler->event_offset++;
 
@@ -2840,14 +2864,14 @@ dpif_netlink_recv_purge__(struct dpif_netlink *dpif)
     OVS_REQ_WRLOCK(dpif->upcall_lock)
 {
     if (dpif->handlers) {
-        size_t i;
+        size_t i, j;
 
-        if (!dpif->channels[0].sock) {
-            return;
-        }
-        for (i = 0; i < dpif->uc_array_size; i++ ) {
-
-            nl_sock_drain(dpif->channels[i].sock);
+        for (j = 0; j < dpif->n_handlers; ++j) {
+            for (i = 0; i < dpif->handlers[j].n_channels; i++ ) {
+                if (dpif->handlers[j].channels[i].sock) {
+                    nl_sock_drain(dpif->handlers[j].channels[i].sock);
+                }
+            }
         }
     }
 }
