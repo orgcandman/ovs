@@ -42,6 +42,12 @@ VLOG_DEFINE_THIS_MODULE(dpif_netlink_rtnl);
 #define IFLA_VXLAN_GPE 27
 #endif
 
+#if IFLA_VXLAN_MAX < 30
+#define IFLA_VXLAN_TTL_INHERIT 28
+#define IFLA_VXLAN_DF 29
+#define IFLA_VXLAN_PMTUDISC 30
+#endif
+
 #ifndef IFLA_GRE_MAX
 #define IFLA_GRE_MAX 0
 #endif
@@ -58,6 +64,13 @@ VLOG_DEFINE_THIS_MODULE(dpif_netlink_rtnl);
 #define IFLA_GENEVE_UDP_ZERO_CSUM6_RX 10
 #endif
 
+#if IFLA_GENEVE_MAX < 14
+#define IFLA_GENEVE_LABEL 11
+#define IFLA_GENEVE_TTL_INHERIT 12
+#define IFLA_GENEVE_DF 13
+#define IFLA_GENEVE_PMTUDISC 14
+#endif
+
 static const struct nl_policy rtlink_policy[] = {
     [IFLA_LINKINFO] = { .type = NL_A_NESTED },
 };
@@ -72,6 +85,9 @@ static const struct nl_policy vxlan_policy[] = {
     [IFLA_VXLAN_PORT] = { .type = NL_A_U16 },
     [IFLA_VXLAN_GBP] = { .type = NL_A_FLAG, .optional = true },
     [IFLA_VXLAN_GPE] = { .type = NL_A_FLAG, .optional = true },
+    [IFLA_VXLAN_TTL_INHERIT] = { .type = NL_A_FLAG, .optional = true },
+    [IFLA_VXLAN_DF] = { .type = NL_A_U8, .optional = true },
+    [IFLA_VXLAN_PMTUDISC] = { .type = NL_A_U8, .optional = true },
 };
 static const struct nl_policy gre_policy[] = {
     [IFLA_GRE_COLLECT_METADATA] = { .type = NL_A_FLAG },
@@ -303,6 +319,27 @@ rtnl_set_mtu(const char *name, uint32_t mtu, struct ofpbuf *request)
     return nl_transact(NETLINK_ROUTE, request, NULL);
 }
 
+static uint8_t
+pmtu_disc_opt(enum udp_tunnel_pmtu_strategy pmtu)
+{
+    switch (pmtu) {
+    default:
+    case UDP_TNL_STRATEGY_UNSET:
+    case UDP_TNL_STRATEGY_DO:
+        return IP_PMTUDISC_DO;
+    case UDP_TNL_STRATEGY_DONT:
+        return IP_PMTUDISC_DONT;
+    case UDP_TNL_STRATEGY_WANT:
+        return IP_PMTUDISC_WANT;
+    case UDP_TNL_STRATEGY_PROBE:
+        return IP_PMTUDISC_PROBE;
+    case UDP_TNL_STRATEGY_INTERFACE:
+        return IP_PMTUDISC_INTERFACE;
+    case UDP_TNL_STRATEGY_OMIT:
+        return IP_PMTUDISC_OMIT;
+    }
+}
+
 static int
 dpif_netlink_rtnl_create(const struct netdev_tunnel_config *tnl_cfg,
                          const char *name, enum ovs_vport_type type,
@@ -345,6 +382,11 @@ dpif_netlink_rtnl_create(const struct netdev_tunnel_config *tnl_cfg,
             nl_msg_put_flag(&request, IFLA_VXLAN_GPE);
         }
         nl_msg_put_be16(&request, IFLA_VXLAN_PORT, tnl_cfg->dst_port);
+
+        if (tnl_cfg->tnl_pmtu_strategy != UDP_TNL_STRATEGY_UNSET) {
+            nl_msg_put_u8(&request, IFLA_VXLAN_PMTUDISC,
+                          pmtu_disc_opt(tnl_cfg->tnl_pmtu_strategy));
+        }
         break;
     case OVS_VPORT_TYPE_GRE:
     case OVS_VPORT_TYPE_ERSPAN:
@@ -356,6 +398,11 @@ dpif_netlink_rtnl_create(const struct netdev_tunnel_config *tnl_cfg,
         nl_msg_put_flag(&request, IFLA_GENEVE_COLLECT_METADATA);
         nl_msg_put_u8(&request, IFLA_GENEVE_UDP_ZERO_CSUM6_RX, 1);
         nl_msg_put_be16(&request, IFLA_GENEVE_PORT, tnl_cfg->dst_port);
+
+        if (tnl_cfg->tnl_pmtu_strategy != UDP_TNL_STRATEGY_UNSET) {
+            nl_msg_put_u8(&request, IFLA_GENEVE_PMTUDISC,
+                          pmtu_disc_opt(tnl_cfg->tnl_pmtu_strategy));
+        }
         break;
     case OVS_VPORT_TYPE_NETDEV:
     case OVS_VPORT_TYPE_INTERNAL:

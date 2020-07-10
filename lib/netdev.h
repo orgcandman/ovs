@@ -97,6 +97,38 @@ enum netdev_pt_mode {
     NETDEV_PT_LEGACY_L3,
 };
 
+/* The pmtu discovery strategy to use with underlying tunnel interface. */
+enum udp_tunnel_pmtu_strategy {
+    /* Indicates invalid / unset tnl strategy. */
+    UDP_TNL_STRATEGY_UNSET,
+
+    /* The UDP socket associated with the tunnel should NEVER send a DF frame. */
+    UDP_TNL_STRATEGY_DONT,
+
+    /* The UDP socket associated with the tunnel should use per-route hints
+     * where available.  */
+    UDP_TNL_STRATEGY_WANT,
+
+    /* The UDP socket associated with the tunnel should ALWAYS send a
+     * DF frame. */
+    UDP_TNL_STRATEGY_DO,
+
+    /* The UDP socket associated with the tunnel should ignore existing
+     * dst pmtu and re-probe, */
+    UDP_TNL_STRATEGY_PROBE,
+
+    /* The UDP socket associated with the tunnel should ignore any
+     * route exceptions that are created and fall back to the interface
+     * information.
+     * Also incoming ICMP frag_needed notifications will be ignored on
+     * this socket to prevent accepting spoofed ones. */
+    UDP_TNL_STRATEGY_INTERFACE,
+
+    /* The UDP socket associated with the tunnel should be allowed to
+     * fragment, in addition to ignoring the any route exceptions. */
+    UDP_TNL_STRATEGY_OMIT,
+};
+
 /* Configuration specific to tunnels. */
 struct netdev_tunnel_config {
     ovs_be64 in_key;
@@ -139,6 +171,8 @@ struct netdev_tunnel_config {
     bool erspan_idx_flow;
     bool erspan_dir_flow;
     bool erspan_hwid_flow;
+
+    enum udp_tunnel_pmtu_strategy tnl_pmtu_strategy;
 };
 
 void netdev_run(void);

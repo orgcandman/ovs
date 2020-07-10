@@ -600,6 +600,7 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
 
     needs_dst_port = netdev_vport_needs_dst_port(dev_);
     tnl_cfg.dont_fragment = true;
+    tnl_cfg.tnl_pmtu_strategy = UDP_TNL_STRATEGY_UNSET;
 
     SMAP_FOR_EACH (node, args) {
         if (!strcmp(node->key, "remote_ip")) {
@@ -656,6 +657,26 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
         } else if (!strcmp(node->key, "df_default")) {
             if (!strcmp(node->value, "false")) {
                 tnl_cfg.dont_fragment = false;
+            }
+        } else if (!strcmp(node->key, "pmtudisc") &&
+                   (!strcmp(type, "vxlan") || !strcmp(type, "geneve"))) {
+            if (!strcmp(node->value, "dont")) {
+                tnl_cfg.tnl_pmtu_strategy = UDP_TNL_STRATEGY_DONT;
+            } else if (!strcmp(node->value, "want")) {
+                tnl_cfg.tnl_pmtu_strategy = UDP_TNL_STRATEGY_WANT;
+            } else if (!strcmp(node->value, "do")) {
+                tnl_cfg.tnl_pmtu_strategy = UDP_TNL_STRATEGY_DO;
+            } else if (!strcmp(node->value, "probe")) {
+                tnl_cfg.tnl_pmtu_strategy = UDP_TNL_STRATEGY_PROBE;
+            } else if (!strcmp(node->value, "interface")) {
+                tnl_cfg.tnl_pmtu_strategy = UDP_TNL_STRATEGY_INTERFACE;
+            } else if (!strcmp(node->value, "omit")) {
+                tnl_cfg.tnl_pmtu_strategy = UDP_TNL_STRATEGY_OMIT;
+            } else {
+                ds_put_format(&errors, "%s: bad pmtudisc option: '%s'\n", name,
+                              node->value);
+                err = EINVAL;
+                goto out;
             }
         } else if (!strcmp(node->key, "key") ||
                    !strcmp(node->key, "in_key") ||
