@@ -889,3 +889,19 @@ ct_dpif_get_timeout_policy_name(struct dpif *dpif, uint32_t tp_id,
                 dpif, tp_id, dl_type, nw_proto, tp_name, is_generic)
             : EOPNOTSUPP);
 }
+
+int
+ct_dpif_set_tcp_loose_mode(struct dpif *dpif, uint32_t loose_mode)
+{
+    return (dpif->dpif_class->ct_set_tcp_loose_mode
+            ? dpif->dpif_class->ct_set_tcp_loose_mode(dpif, loose_mode)
+            : EOPNOTSUPP);
+}
+
+int
+ct_dpif_get_tcp_loose_mode(struct dpif *dpif, uint32_t *loose_mode)
+{
+    return (dpif->dpif_class->ct_get_tcp_loose_mode
+            ? dpif->dpif_class->ct_get_tcp_loose_mode(dpif, loose_mode)
+            : EOPNOTSUPP);
+}

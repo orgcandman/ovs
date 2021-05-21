@@ -1905,6 +1905,9 @@ struct ofproto_class {
     /* Deletes the timeout policy associated with 'zone' in datapath type
      * 'dp_type'. */
     void (*ct_del_zone_timeout_policy)(const char *dp_type, uint16_t zone);
+
+    void (*ct_get_tcp_loose_mode)(const char *dp_type, uint32_t *loose_mode);
+    void (*ct_set_tcp_loose_mode)(const char *dp_type, uint32_t loose_mode);
 };
 
 extern const struct ofproto_class ofproto_dpif_class;

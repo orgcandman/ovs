@@ -5640,6 +5640,64 @@ ofproto_dpif_ct_zone_timeout_policy_get_name(
     return true;
 }
 
+/* Gets the value of the datapath tcp loose mode setting.  A zero
+ * value indicates that loose mode is disabled.  Otherwise, we can
+ * assume that the datapath will be picking up some forms of 
+ * established connections.
+ * Returns 'true' when the value of loose_mode is valid, otherwise
+ * returns 'false' when the operation isn't supported or an error
+ * occurred trying to get the value.
+ */
+static bool
+ofproto_dpif_ct_get_tcp_loose_mode(const struct dpif_backer *backer,
+                                   uint32_t *loose_mode)
+{
+    return !ct_dpif_get_tcp_loose_mode(backer->dpif, loose_mode);
+}
+
+static void
+ct_get_tcp_loose_mode(const char *dp_type, uint32_t *loose_mode)
+{
+    struct dpif_backer *backer = shash_find_data(&all_dpif_backers, dp_type);
+    if (!backer) {
+        return;
+    }
+
+    if (!ofproto_dpif_ct_get_tcp_loose_mode(backer, loose_mode)) {
+        VLOG_INFO_RL(&rl, "unable to get dp:%s tcp-loose-mode setting.",
+                     dp_type);
+    }
+}
+
+/* Sets the value of the datapath tcp loose mode setting.  A zero
+ * value indicates will disable loose mode.  A non-zero value will
+ * tell the datapath to pick up already established connections.
+ *
+ * Returns 'true' when the value of loose_mode is valid, otherwise
+ * returns 'false' when the operation isn't supported or an error
+ * occurred trying to set the value.
+ */
+static bool
+ofproto_dpif_ct_set_tcp_loose_mode(const struct dpif_backer *backer,
+                                   uint32_t loose_mode)
+{
+    return !ct_dpif_set_tcp_loose_mode(backer->dpif, loose_mode);
+}
+
+static void
+ct_set_tcp_loose_mode(const char *dp_type, uint32_t loose_mode)
+{
+    struct dpif_backer *backer = shash_find_data(&all_dpif_backers, dp_type);
+    if (!backer) {
+        return;
+    }
+
+    if (!ofproto_dpif_ct_set_tcp_loose_mode(backer, loose_mode)) {
+        VLOG_ERR_RL(&rl, "failed to set dp:%s tcp-loose-mode "
+                    "setting %"PRIu32".", dp_type, loose_mode);
+    }
+}
+
 static bool
 set_frag_handling(struct ofproto *ofproto_,
                   enum ofputil_frag_handling frag_handling)
@@ -6748,4 +6806,6 @@ const struct ofproto_class ofproto_dpif_class = {
     ct_flush,                   /* ct_flush */
     ct_set_zone_timeout_policy,
     ct_del_zone_timeout_policy,
+    ct_get_tcp_loose_mode,
+    ct_set_tcp_loose_mode,
 };

@@ -562,6 +562,15 @@ struct dpif_class {
                                       uint16_t dl_type, uint8_t nw_proto,
                                       char **tp_name, bool *is_generic);
 
+    /* CT TCP loose mode */
+    /* Gets and sets whether the datapath will be "loose" when accepting
+     * TCP connections into the tracker.  When the datapath is "loose,"
+     * connections can be added to the table from transactions 
+     * 'in-the-middle' rather than need to see connection handshakes.
+     * Not every datapath may support this. */
+    int (*ct_get_tcp_loose_mode)(struct dpif *, uint32_t *loose_mode);
+    int (*ct_set_tcp_loose_mode)(struct dpif *, uint32_t loose_mode);
+
     /* IP Fragmentation. */
 
     /* Disables or enables conntrack fragment reassembly.  The default
