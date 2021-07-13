@@ -718,6 +718,7 @@ dpdk_get_cpu_has_isa(const char *arch, const char *feature)
 void
 dpdk_status(const struct ovsrec_open_vswitch *cfg)
 {
+#error  BAD BAD BAD - this is a test to see how the logs work
     if (cfg) {
         ovsrec_open_vswitch_set_dpdk_initialized(cfg, dpdk_initialized);
         ovsrec_open_vswitch_set_dpdk_version(cfg, rte_version());
